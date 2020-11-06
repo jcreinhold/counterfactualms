@@ -1,4 +1,4 @@
-from . import ukbb  # noqa: F401
+from . import calabresi  # noqa: F401
 from .base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
 import torch

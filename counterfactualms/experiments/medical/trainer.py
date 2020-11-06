@@ -1,4 +1,4 @@
-from deepscm.experiments import morphomnist  # noqa: F401
+from . import calabresi  # noqa: F401
 from .base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
 if __name__ == '__main__':
@@ -6,6 +6,8 @@ if __name__ == '__main__':
     from pytorch_lightning.logging import TensorBoardLogger
     import argparse
     import os
+
+    import warnings
 
     exp_parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     exp_parser.add_argument('--experiment', '-e', help='which experiment to load', choices=tuple(EXPERIMENT_REGISTRY.keys()))
@@ -59,4 +61,6 @@ if __name__ == '__main__':
     model = model_class(**vars(model_params))
     experiment = exp_class(hparams, model)
 
-    trainer.fit(experiment)
+    with warnings.catch_warnings():
+        warnings.simplefilter("once")
+        trainer.fit(experiment)

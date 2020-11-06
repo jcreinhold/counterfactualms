@@ -1,3 +1,0 @@
-[submodule "submodules/morphomnist"]
-	path = deepscm/submodules/morphomnist
-	url = https://github.com/dccastro/Morpho-MNIST.git

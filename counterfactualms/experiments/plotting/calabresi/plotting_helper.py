@@ -1,6 +1,6 @@
 ROOT_PATH = '../../../../'
-UKBB_DATA_PATH = ROOT_PATH + 'assets/data/ukbb/'
-BASE_LOG_PATH = ROOT_PATH + 'assets/models/ukbb/SVIExperiment'
+UKBB_DATA_PATH = ROOT_PATH + 'assets/data/calabresi/'
+BASE_LOG_PATH = ROOT_PATH + 'assets/models/calabresi/SVIExperiment'
 
 import sys
 import os
