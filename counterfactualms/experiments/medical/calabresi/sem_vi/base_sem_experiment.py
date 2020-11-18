@@ -4,7 +4,7 @@ from typing import Mapping
 
 from pyro.infer import SVI, TraceGraph_ELBO
 from pyro.nn import pyro_method
-from pyro.optim import Adam
+from pyro.optim import Adam  # noqa: F401
 from torch.distributions import Independent
 
 import torch
@@ -12,17 +12,18 @@ from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, Spline
 )
-from pyro.distributions import LowRankMultivariateNormal, MultivariateNormal, Normal, TransformedDistribution
-from deepscm.arch.medical import Decoder, Encoder
-from deepscm.distributions.transforms.reshape import ReshapeTransform
-from deepscm.distributions.transforms.affine import LowerCholeskyAffine
+from pyro.distributions import LowRankMultivariateNormal, MultivariateNormal, Normal, TransformedDistribution  # noqa: F401
+from counterfactualms.arch.medical import Decoder, Encoder
+from counterfactualms.distributions.transforms.reshape import ReshapeTransform
+from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
 
-from deepscm.distributions.deep import DeepMultivariateNormal, DeepIndepNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
+from counterfactualms.distributions.deep import DeepMultivariateNormal, DeepIndepNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
 
 import numpy as np
 
-from deepscm.experiments.medical.base_experiment import BaseCovariateExperiment, BaseSEM, EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
-
+from counterfactualms.experiments.medical.base_experiment import (
+    BaseCovariateExperiment, BaseSEM, EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
+)
 
 class CustomELBO(TraceGraph_ELBO):
     def __init__(self, *args, **kwargs):
@@ -51,8 +52,9 @@ class Lambda(torch.nn.Module):
 class BaseVISEM(BaseSEM):
     context_dim = 0
 
-    def __init__(self, latent_dim: int, logstd_init: float = -5, enc_filters: str = '16,32,64,128', dec_filters: str = '128,64,32,16',
-                 num_convolutions: int = 2, use_upconv: bool = False, decoder_type: str = 'fixed_var', decoder_cov_rank: int = 10, **kwargs):
+    def __init__(self, latent_dim:int, logstd_init:float=-5, enc_filters:str='16,32,64,128',
+                 dec_filters:str='128,64,32,16', num_convolutions:int=2, use_upconv:bool=False,
+                 decoder_type:str='fixed_var', decoder_cov_rank:int=10, **kwargs):
         super().__init__(**kwargs)
 
         self.img_shape = (1, 192 // self.downsample, 192 // self.downsample) if self.downsample > 0 else (1, 192, 192)
@@ -208,6 +210,8 @@ class BaseVISEM(BaseSEM):
         elif isinstance(x_pred_dist, Independent):
             x_pred_dist = x_pred_dist.base_dist
             x_reparam_transform = AffineTransform(x_pred_dist.loc, x_pred_dist.scale, 3)
+        else:
+            raise ValueError(f'{x_pred_dist} not valid.')
 
         return TransformedDistribution(x_base_dist, ComposeTransform([x_reparam_transform, preprocess_transform]))
 

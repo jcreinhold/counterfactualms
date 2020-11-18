@@ -2,12 +2,12 @@ import torch
 import pyro
 
 from pyro.nn import pyro_method
-from pyro.distributions import Normal, Bernoulli, TransformedDistribution
+from pyro.distributions import Normal, Bernoulli, TransformedDistribution # noqa: F401
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from deepscm.distributions.transforms.affine import ConditionalAffineTransform
+from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
 from pyro.nn import DenseNN
 
-from deepscm.experiments.medical.ukbb.sem_vi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
+from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
 
 class ConditionalVISEM(BaseVISEM):

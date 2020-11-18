@@ -8,14 +8,13 @@ import torch
 import torchvision as tv
 
 
-class UKBBDataset(Dataset):
-    def __init__(self, csv_path, base_path='/vol/biomedic2/bglocker/gemini/UKBB/t0/', crop_type=None, crop_size=(192, 192), downsample: int = None):
+class CalabresiDataset(Dataset):
+    def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), downsample:int=None):
         super().__init__()
         self.csv_path = csv_path
         df = pd.read_csv(csv_path)
         self.num_items = len(df)
         self.metrics = {col: torch.as_tensor(df[col]).float() for col in df.columns}
-        self.base_path = base_path
 
         self.crop_type = crop_type
         self.crop_size = crop_size

@@ -4,12 +4,12 @@ Multivariate t-distribution
 import math
 
 import torch
-from pyro.distributions import Chi2, TorchDistribution
+from pyro.distributions import Chi2, TorchDistribution  # noqa: F401
 from torch._six import inf, nan
 from torch.distributions import constraints
 from torch.distributions.utils import _standard_normal, broadcast_all, lazy_property
 
-from deepscm.util import triangular_logdet, matvec
+from counterfactualms.util import triangular_logdet, matvec
 
 
 class MultivariateStudentT(TorchDistribution):

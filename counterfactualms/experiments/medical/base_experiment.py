@@ -2,11 +2,11 @@ import pyro
 
 from pyro.nn import PyroModule, pyro_method
 
-from pyro.distributions import TransformedDistribution
+from pyro.distributions import TransformedDistribution  # noqa: F401
 from pyro.infer.reparam.transform import TransformReparam
 from torch.distributions import Independent
 
-from deepscm.datasets.medical.ukbb import UKBBDataset
+from counterfactualms.datasets.medical.calabresi import CalabresiDataset
 from pyro.distributions.transforms import ComposeTransform, SigmoidTransform, AffineTransform
 
 import torchvision.utils
@@ -27,9 +27,8 @@ MODEL_REGISTRY = {}
 
 
 class BaseSEM(PyroModule):
-    def __init__(self, preprocessing: str = 'realnvp', downsample: int = -1):
+    def __init__(self, preprocessing:str='realnvp', downsample:int=-1):
         super().__init__()
-
         self.downsample = downsample
         self.preprocessing = preprocessing
 
@@ -51,7 +50,8 @@ class BaseSEM(PyroModule):
             s = SigmoidTransform()
 
             preprocess_transform = ComposeTransform([a1, a2, s.inv])
-
+        else:
+            raise ValueError(f'{self.preprocessing} not valid.')
         return preprocess_transform
 
     @pyro_method
@@ -169,9 +169,9 @@ class BaseCovariateExperiment(pl.LightningModule):
         train_crop_type = self.hparams.train_crop_type if hasattr(self.hparams, 'train_crop_type') else 'random'
         split_dir = self.hparams.split_dir if hasattr(self.hparams, 'split_dir') else '/vol/biomedic2/np716/data/gemini/calabresi/ventricle_brain/'
         data_dir = self.hparams.data_dir if hasattr(self.hparams, 'data_dir') else '/vol/biomedic2/bglocker/gemini/UKBB/t0/'
-        self.ukbb_train = UKBBDataset(f'{split_dir}/train.csv', base_path=data_dir, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
-        self.ukbb_val = UKBBDataset(f'{split_dir}/val.csv', base_path=data_dir, crop_type='center', downsample=downsample)
-        self.ukbb_test = UKBBDataset(f'{split_dir}/test.csv', base_path=data_dir, crop_type='center', downsample=downsample)
+        self.calabresi_train = CalabresiDataset(f'{split_dir}/train.csv', base_path=data_dir, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
+        self.calabresi_val = CalabresiDataset(f'{split_dir}/val.csv', base_path=data_dir, crop_type='center', downsample=downsample)
+        self.calabresi_test = CalabresiDataset(f'{split_dir}/test.csv', base_path=data_dir, crop_type='center', downsample=downsample)
 
         self.torch_device = self.trainer.root_gpu if self.trainer.on_gpu else self.trainer.root_device
 
@@ -182,14 +182,14 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.ventricle_volume_range = ventricle_volumes.repeat_interleave(3).unsqueeze(1)
         self.z_range = torch.randn([1, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat((9, 1))
 
-        self.pyro_model.age_flow_lognorm_loc = (self.ukbb_train.metrics['age'].log().mean().to(self.torch_device).float())
-        self.pyro_model.age_flow_lognorm_scale = (self.ukbb_train.metrics['age'].log().std().to(self.torch_device).float())
+        self.pyro_model.age_flow_lognorm_loc = (self.calabresi_train.metrics['age'].log().mean().to(self.torch_device).float())
+        self.pyro_model.age_flow_lognorm_scale = (self.calabresi_train.metrics['age'].log().std().to(self.torch_device).float())
 
-        self.pyro_model.ventricle_volume_flow_lognorm_loc = (self.ukbb_train.metrics['ventricle_volume'].log().mean().to(self.torch_device).float())
-        self.pyro_model.ventricle_volume_flow_lognorm_scale = (self.ukbb_train.metrics['ventricle_volume'].log().std().to(self.torch_device).float())
+        self.pyro_model.ventricle_volume_flow_lognorm_loc = (self.calabresi_train.metrics['ventricle_volume'].log().mean().to(self.torch_device).float())
+        self.pyro_model.ventricle_volume_flow_lognorm_scale = (self.calabresi_train.metrics['ventricle_volume'].log().std().to(self.torch_device).float())
 
-        self.pyro_model.brain_volume_flow_lognorm_loc = (self.ukbb_train.metrics['brain_volume'].log().mean().to(self.torch_device).float())
-        self.pyro_model.brain_volume_flow_lognorm_scale = (self.ukbb_train.metrics['brain_volume'].log().std().to(self.torch_device).float())
+        self.pyro_model.brain_volume_flow_lognorm_loc = (self.calabresi_train.metrics['brain_volume'].log().mean().to(self.torch_device).float())
+        self.pyro_model.brain_volume_flow_lognorm_scale = (self.calabresi_train.metrics['brain_volume'].log().std().to(self.torch_device).float())
 
         if self.hparams.validate:
             print(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
@@ -200,14 +200,14 @@ class BaseCovariateExperiment(pl.LightningModule):
         pass
 
     def train_dataloader(self):
-        return DataLoader(self.ukbb_train, batch_size=self.train_batch_size, shuffle=True)
+        return DataLoader(self.calabresi_train, batch_size=self.train_batch_size, shuffle=True)
 
     def val_dataloader(self):
-        self.val_loader = DataLoader(self.ukbb_val, batch_size=self.test_batch_size, shuffle=False)
+        self.val_loader = DataLoader(self.calabresi_val, batch_size=self.test_batch_size, shuffle=False)
         return self.val_loader
 
     def test_dataloader(self):
-        self.test_loader = DataLoader(self.ukbb_test, batch_size=self.test_batch_size, shuffle=False)
+        self.test_loader = DataLoader(self.calabresi_test, batch_size=self.test_batch_size, shuffle=False)
         return self.test_loader
 
     def forward(self, *args, **kwargs):
@@ -382,6 +382,7 @@ class BaseCovariateExperiment(pl.LightningModule):
                     raise ValueError(f'got too many values: {len(covariates)}')
             except np.linalg.LinAlgError:
                 print(f'got a linalg error when plotting {tag}/{name}')
+                raise
 
             ax[i].set_title(name)
             ax[i].set_xlabel(x_n)

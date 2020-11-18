@@ -1,8 +1,8 @@
 import torch
 import torch.distributions as td
 
-from .multivariate import MultivariateDistribution
-from deepscm.util import matvec, posdef_inverse
+from counterfactualms.distributions.multivariate import MultivariateDistribution
+from counterfactualms.util import matvec, posdef_inverse
 
 
 class MultivariateNormal(MultivariateDistribution, td.MultivariateNormal):

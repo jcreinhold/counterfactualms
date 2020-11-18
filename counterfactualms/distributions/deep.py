@@ -1,11 +1,11 @@
 import torch
 from pyro.distributions import (
-    Bernoulli, Beta, Gamma, Independent, MultivariateNormal,
-    Normal, TorchDistribution, LowRankMultivariateNormal
+    Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
+    Independent, MultivariateNormal, Normal, TorchDistribution
 )
 from torch import nn
 
-from .params import MixtureParams
+from counterfactualms.distributions.params import MixtureParams
 
 
 class DeepConditional(nn.Module):

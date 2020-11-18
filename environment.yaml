@@ -56,6 +56,7 @@ dependencies:
   - ipykernel
   - ipython
   - ipython_genutils
+  - ipywidgets
   - isort
   - jinja2
   - joblib
@@ -198,6 +199,7 @@ dependencies:
   - websocket-client
   - werkzeug
   - wheel
+  - widgetsnbextension
   - xz
   - yaml
   - yapf

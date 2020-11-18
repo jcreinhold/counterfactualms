@@ -6,7 +6,7 @@ from torch.distributions import constraints
 from torch.distributions.exp_family import ExponentialFamily
 from torch.distributions.utils import lazy_property
 
-from deepscm import util
+from counterfactualms import util
 
 
 def mvdigamma(x: torch.Tensor, p: int) -> torch.Tensor:

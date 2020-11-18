@@ -1,54 +1,42 @@
 ROOT_PATH = '../../../../'
-UKBB_DATA_PATH = ROOT_PATH + 'assets/data/calabresi/'
+CALABRESI_DATA_PATH = ROOT_PATH + 'assets/data/calabresi/'
 BASE_LOG_PATH = ROOT_PATH + 'assets/models/calabresi/SVIExperiment'
 
-import sys
 import os
-
-sys.path.append(ROOT_PATH)
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
-import torch
 import pyro
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-import glob
-import pandas as pd
 import inspect
 from collections import OrderedDict
 from functools import partial
 import torch
 
-from tqdm import tqdm, trange
-
 import traceback
 import warnings
-from scipy.stats import gaussian_kde
 
 warnings.filterwarnings("ignore", category=UserWarning)
-
-torch.autograd.set_grad_enabled(False);
+torch.autograd.set_grad_enabled(False)
 
 import matplotlib as mpl
 mpl.rcParams['figure.dpi'] = 300
 
-from matplotlib.colors import ListedColormap
 from matplotlib import cm
 cmaps = [cm.Reds, cm.Blues, cm.Greens]
 img_cm = 'Greys_r'
 diff_cm = 'seismic'
 
-from deepscm.datasets.medical.ukbb import UKBBDataset
+from counterfactualms.datasets.medical.calabresi import CalabresiDataset
 
-data_dir = f'{UKBB_DATA_PATH}/examples.csv'
-base_path = f'{UKBB_DATA_PATH}/imgs/'
+data_dir = f'{CALABRESI_DATA_PATH}/examples.csv'
+base_path = f'{CALABRESI_DATA_PATH}/imgs/'
 downsample = 3
-ukbb_test = UKBBDataset(data_dir, base_path=base_path, crop_type='center', downsample=downsample)
+calabresi_test = CalabresiDataset(data_dir, crop_type='center', downsample=downsample)
 
-from deepscm.experiments.medical import ukbb  # noqa: F401
-from deepscm.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
+from counterfactualms.experiments.medical import calabresi # noqa: F401
+from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
 var_name = {'ventricle_volume': 'v', 'brain_volume': 'b', 'sex': 's', 'age': 'a'}
 value_fmt = {
@@ -130,7 +118,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
     fig, ax = plt.subplots(3, len(interventions), figsize=(1.6 * len(interventions), 5), gridspec_kw=dict(wspace=0, hspace=0))
     lim = 0
     
-    orig_data = prep_data(ukbb_test[idx])
+    orig_data = prep_data(calabresi_test[idx])
     
     imgs = []
     for intervention in interventions:
@@ -176,7 +164,7 @@ def interactive_plot(model_name):
         fig, ax = plt.subplots(1, 4, figsize=(10, 2.5), gridspec_kw=dict(wspace=0, hspace=0))
         lim = 0
 
-        orig_data = prep_data(ukbb_test[idx])
+        orig_data = prep_data(calabresi_test[idx])
         x_test = orig_data['x']
 
         pyro.clear_param_store()
@@ -214,6 +202,7 @@ def interactive_plot(model_name):
         plt.show()
     
     from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
+    from IPython.display import display
 
     def plot(image, age, sex, brain_volume, ventricle_volume, do_age, do_sex, do_brain_volume, do_ventricle_volume):
         intervention = {}

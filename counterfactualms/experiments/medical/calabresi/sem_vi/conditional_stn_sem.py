@@ -2,21 +2,22 @@ import torch
 import pyro
 import warnings
 
-from deepscm.arch.medical import Decoder, Encoder
-from deepscm.distributions.deep import DeepIndepNormal
+from counterfactualms.arch.medical import Decoder, Encoder
+from counterfactualms.distributions.deep import DeepIndepNormal
 
 from pyro.nn import pyro_method
-from pyro.distributions import Normal, Bernoulli, TransformedDistribution
+from pyro.distributions import Normal, Bernoulli, TransformedDistribution  # noqa: F401
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, Spline
 )
 from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from deepscm.distributions.transforms.affine import ConditionalAffineTransform
+from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
 from pyro.nn import DenseNN
 from torch import nn
+from torch.nn import functional as F
 
-from deepscm.experiments.medical.ukbb.sem_vi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
+from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
 
 class ConditionalSTNVISEM(BaseVISEM):
@@ -121,8 +122,8 @@ class ConditionalSTNVISEM(BaseVISEM):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
-            grid = nn.functional.affine_grid(theta, x_loc.size())
-            x_loc_deformed = nn.functional.grid_sample(x_loc, grid)
+            grid = F.affine_grid(theta, x_loc.size())
+            x_loc_deformed = F.grid_sample(x_loc, grid)
 
         x_base_dist = Normal(self.x_base_loc, self.x_base_scale).to_event(3)
 

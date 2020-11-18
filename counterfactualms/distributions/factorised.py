@@ -5,7 +5,7 @@ from pyro.distributions import TorchDistribution
 from torch.distributions import register_kl
 from torch.distributions.constraints import Constraint
 
-from .multivariate import MultivariateDistribution
+from counterfactualms.distributions.multivariate import MultivariateDistribution
 
 
 def _iterate_parts(value, ndims: Sequence[int]):

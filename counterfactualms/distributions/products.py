@@ -7,10 +7,10 @@ from torch import Tensor
 from pyro.distributions import Categorical as PyroCategorical, MultivariateNormal as PyroMultivariateNormal
 from torch.distributions import Distribution, Categorical, MultivariateNormal
 
-from .factorised import Factorised
-from .multivariate import MultivariateDistribution
-from .natural_mvn import NaturalMultivariateNormal
-from deepscm.util import posdef_solve
+from counterfactualms.distributions.factorised import Factorised
+from counterfactualms.distributions.multivariate import MultivariateDistribution
+from counterfactualms.distributions.natural_mvn import NaturalMultivariateNormal
+from counterfactualms.util import posdef_solve
 
 _PROD_REGISTRY = {}
 
