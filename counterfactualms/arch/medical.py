@@ -1,10 +1,9 @@
-from torch import nn
-
 import numpy as np
+from torch import nn
 
 
 class Encoder(nn.Module):
-    def __init__(self, num_convolutions=1, filters=(16, 32, 64, 128), latent_dim: int = 128, input_size=(1, 192, 192)):
+    def __init__(self, num_convolutions=1, filters=(16,32,64,128), latent_dim:int=128, input_size=(1,192,192)):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -36,12 +35,12 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         x = self.cnn(x).view(-1, np.prod(self.intermediate_shape))
-
         return self.fc(x)
 
 
 class Decoder(nn.Module):
-    def __init__(self, num_convolutions=1, filters=(128, 64, 32, 16), latent_dim: int = 128, output_size=(1, 192, 192), upconv=False):
+    def __init__(self, num_convolutions=1, filters=(128,64,32,16), latent_dim:int=128,
+                 output_size=(1,192,192), upconv=False):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -81,5 +80,4 @@ class Decoder(nn.Module):
 
     def forward(self, x):
         x = self.fc(x).view(-1, *self.intermediate_shape)
-
         return self.cnn(x)

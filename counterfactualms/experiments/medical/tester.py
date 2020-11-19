@@ -1,19 +1,30 @@
+import argparse
+import inspect
+import logging
+import os
+import sys
+
+from pytorch_lightning import Trainer
+import torch
+
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
-import torch
-import inspect
 
-
-if __name__ == '__main__':
-    from pytorch_lightning import Trainer
-    import argparse
-    import os
-
+def main():
     exp_parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     exp_parser.add_argument('--checkpoint_path', '-c', help='which checkpoint to load')
+    exp_parser.add_argument('-v', '--verbosity', action="count", default=0,
+                            help="increase output verbosity (e.g., -vv is more than -v)")
 
     exp_args, other_args = exp_parser.parse_known_args()
+    if exp_args.verbosity == 1:
+        level = logging.getLevelName('INFO')
+    elif exp_args.verbosity >= 2:
+        level = logging.getLevelName('DEBUG')
+    else:
+        level = logging.getLevelName('WARNING')
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=level)
 
     print(f'Running test with {exp_args}')
 
@@ -71,3 +82,7 @@ if __name__ == '__main__':
     print(f'Loaded {experiment.__class__}:\n{experiment}')
 
     trainer.test(experiment)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

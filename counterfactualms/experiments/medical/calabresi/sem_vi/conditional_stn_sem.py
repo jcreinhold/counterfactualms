@@ -1,10 +1,10 @@
-import torch
-import pyro
 import warnings
 
-from counterfactualms.arch.medical import Decoder, Encoder
-from counterfactualms.distributions.deep import DeepIndepNormal
+import torch
+from torch import nn
+from torch.nn import functional as F
 
+import pyro
 from pyro.nn import pyro_method
 from pyro.distributions import Normal, Bernoulli, TransformedDistribution  # noqa: F401
 from pyro.distributions.transforms import (
@@ -14,9 +14,9 @@ from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
 from pyro.nn import DenseNN
-from torch import nn
-from torch.nn import functional as F
 
+from counterfactualms.arch.medical import Decoder, Encoder
+from counterfactualms.distributions.deep import DeepIndepNormal
 from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
 

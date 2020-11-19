@@ -1,8 +1,6 @@
-from torch.utils.data.dataset import Dataset
-from skimage.io import imread
-import numpy as np
 import pandas as pd
-
+from skimage.io import imread
+from torch.utils.data.dataset import Dataset
 import torchvision as tv
 
 
@@ -10,7 +8,12 @@ class CalabresiDataset(Dataset):
     def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), downsample:int=None):
         super().__init__()
         self.csv_path = csv_path
-        self.csv = pd.read_csv(csv_path)
+        csv = pd.read_csv(csv_path)
+        csv.drop(['fss', 'msss', 'treatment_propagated', 'treatment'], axis=1, inplace=True)
+        csv['relapse_last30days'] = csv['relapse_last30days'].map({'N': 0, 'Y': 1})
+        csv['sex'] = csv['sex'].map({'M': 0, 'F': 1})
+        csv['type'] = csv['type'].map({'HC': 0, 'RRMS': 1, 'SPMS': 1, 'PPMS': 1})
+        self.csv = csv
         self.crop_type = crop_type
         self.crop_size = crop_size
         self.downsample = downsample
@@ -20,8 +23,9 @@ class CalabresiDataset(Dataset):
         return len(self.csv)
 
     def __getitem__(self, index):
-        row = self.csv.loc[index]
-        img_path = row['filename']
+        item = self.csv.loc[index]
+        item = item.to_dict()
+        img_path = item['filename']
         img = imread(img_path, as_gray=True)
 
         transform_list = []
@@ -39,27 +43,5 @@ class CalabresiDataset(Dataset):
 
         transform_list += [tv.transforms.ToTensor()]
         img = tv.transforms.Compose(transform_list)(img)
-        item = self._convert_row(row)
         item['image'] = img
         return item
-
-    @staticmethod
-    def _convert_row(row):
-        type = {'HC': 0, 'RRMS': 1, 'SPMS': 1}
-        sex = {'M': 0, 'F': 1}
-        relapse = {np.nan: np.nan, 'N': 0, 'Y': 1}
-        out = dict(
-            age=row['age'],
-            brain_volume=row['brain_volume'],
-            duration=row['duration'],
-            edss=row['edss'],
-            image=None,
-            relapse=relapse[row['relapse_last30days']],
-            scan=row['scan'],
-            sex=sex[row['sex']],
-            slice_number=row['slice_number'],
-            subject=row['subject'],
-            type=type[row['type']],
-            ventricle_volume=row['ventricle_volume']
-        )
-        return out

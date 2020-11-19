@@ -1,26 +1,25 @@
+from functools import partial
+import logging
+import os
+
+import torchvision.utils
+import matplotlib.pyplot as plt
+import numpy as np
+import pytorch_lightning as pl
+import seaborn as sns
+import torch
+from torch.utils.data import DataLoader
+
 import pyro
-
 from pyro.nn import PyroModule, pyro_method
-
 from pyro.distributions import TransformedDistribution  # noqa: F401
 from pyro.infer.reparam.transform import TransformReparam
 from torch.distributions import Independent
-
-from counterfactualms.datasets.medical.calabresi import CalabresiDataset
 from pyro.distributions.transforms import ComposeTransform, SigmoidTransform, AffineTransform
 
-import torchvision.utils
-from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-import torch
-import numpy as np
+from counterfactualms.datasets.medical.calabresi import CalabresiDataset
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-import os
-from functools import partial
-
+logger = logging.getLogger(__name__)
 
 EXPERIMENT_REGISTRY = {}
 MODEL_REGISTRY = {}
@@ -138,9 +137,7 @@ class BaseSEM(PyroModule):
 class BaseCovariateExperiment(pl.LightningModule):
     def __init__(self, hparams, pyro_model: BaseSEM):
         super().__init__()
-
         self.pyro_model = pyro_model
-
         hparams.experiment = self.__class__.__name__
         hparams.model = pyro_model.__class__.__name__
         self.hparams = hparams
@@ -153,12 +150,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.pyro_model._gen_counterfactual = self.pyro_model.counterfactual
 
         if hparams.validate:
-            import random
-
-            torch.manual_seed(0)
-            np.random.seed(0)
-            random.seed(0)
-
+            pl.seed_everything(1337)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
             torch.autograd.set_detect_anomaly(self.hparams.validate)
@@ -180,19 +172,22 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.ventricle_volume_range = ventricle_volumes.repeat_interleave(3).unsqueeze(1)
         self.z_range = torch.randn([1, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat((9, 1))
 
-        self.pyro_model.age_flow_lognorm_loc = (self.calabresi_train.metrics['age'].log().mean().to(self.torch_device).float())
-        self.pyro_model.age_flow_lognorm_scale = (self.calabresi_train.metrics['age'].log().std().to(self.torch_device).float())
+        age = torch.from_numpy(self.calabresi_train.csv['age'].to_numpy())
+        self.pyro_model.age_flow_lognorm_loc = (age.log().mean().to(self.torch_device).float())
+        self.pyro_model.age_flow_lognorm_scale = (age.log().std().to(self.torch_device).float())
 
-        self.pyro_model.ventricle_volume_flow_lognorm_loc = (self.calabresi_train.metrics['ventricle_volume'].log().mean().to(self.torch_device).float())
-        self.pyro_model.ventricle_volume_flow_lognorm_scale = (self.calabresi_train.metrics['ventricle_volume'].log().std().to(self.torch_device).float())
+        ventricle_volume = torch.from_numpy(self.calabresi_train.csv['ventricle_volume'].to_numpy())
+        self.pyro_model.ventricle_volume_flow_lognorm_loc = (ventricle_volume.log().mean().to(self.torch_device).float())
+        self.pyro_model.ventricle_volume_flow_lognorm_scale = (ventricle_volume.log().std().to(self.torch_device).float())
 
-        self.pyro_model.brain_volume_flow_lognorm_loc = (self.calabresi_train.metrics['brain_volume'].log().mean().to(self.torch_device).float())
-        self.pyro_model.brain_volume_flow_lognorm_scale = (self.calabresi_train.metrics['brain_volume'].log().std().to(self.torch_device).float())
+        brain_volume = torch.from_numpy(self.calabresi_train.csv['brain_volume'].to_numpy())
+        self.pyro_model.brain_volume_flow_lognorm_loc = (brain_volume.log().mean().to(self.torch_device).float())
+        self.pyro_model.brain_volume_flow_lognorm_scale = (brain_volume.log().std().to(self.torch_device).float())
 
         if self.hparams.validate:
-            print(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
-            print(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')
-            print(f'set brain_volume_flow_lognorm {self.pyro_model.brain_volume_flow_lognorm.loc} +/- {self.pyro_model.brain_volume_flow_lognorm.scale}')
+            logger.info(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')
+            logger.info(f'set brain_volume_flow_lognorm {self.pyro_model.brain_volume_flow_lognorm.loc} +/- {self.pyro_model.brain_volume_flow_lognorm.scale}')
 
     def configure_optimizers(self):
         pass
@@ -233,7 +228,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         return {'val_loss': val_loss, 'log': metrics}
 
     def test_epoch_end(self, outputs):
-        print('Assembling outputs')
+        logger.info('Assembling outputs')
         outputs = self.assemble_epoch_end_outputs(outputs)
 
         samples = outputs.pop('samples')
@@ -247,7 +242,6 @@ class BaseCovariateExperiment(pl.LightningModule):
             'sex': sample_trace.nodes['sex']['value'].cpu()
         }
 
-        cond_data = {'brain_volume': self.brain_volume_range, 'ventricle_volume': self.ventricle_volume_range, 'z': self.z_range}
         cond_data = {
             'brain_volume': self.brain_volume_range.repeat(self.hparams.test_batch_size, 1),
             'ventricle_volume': self.ventricle_volume_range.repeat(self.hparams.test_batch_size, 1),
@@ -262,20 +256,15 @@ class BaseCovariateExperiment(pl.LightningModule):
             'sex': sample_trace.nodes['sex']['value'].cpu()
         }
 
-        print(f'Got samples: {tuple(samples.keys())}')
-
+        logger.info(f'Got samples: {tuple(samples.keys())}')
         metrics = {('test/' + k): v for k, v in outputs.items()}
-
         for k, v in samples.items():
             p = os.path.join(self.trainer.logger.experiment.log_dir, f'{k}.pt')
-
-            print(f'Saving samples for {k} to {p}')
-
+            logging.info(f'Saving samples for {k} to {p}')
             torch.save(v, p)
 
         p = os.path.join(self.trainer.logger.experiment.log_dir, 'metrics.pt')
         torch.save(metrics, p)
-
         return {'test_loss': metrics['test/loss'], 'log': metrics}
 
     def assemble_epoch_end_outputs(self, outputs):
@@ -379,7 +368,7 @@ class BaseCovariateExperiment(pl.LightningModule):
                 else:
                     raise ValueError(f'got too many values: {len(covariates)}')
             except np.linalg.LinAlgError:
-                print(f'got a linalg error when plotting {tag}/{name}')
+                logging.info(f'got a linalg error when plotting {tag}/{name}')
                 raise
 
             ax[i].set_title(name)
@@ -498,16 +487,16 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument('--data_dir', default="/vol/biomedic2/bglocker/gemini/UKBB/t0/", type=str, help="data dir (default: %(default)s)")  # noqa: E501
-        parser.add_argument('--split_dir', default="/vol/biomedic2/np716/data/gemini/calabresi/ventricle_brain/", type=str, help="split dir (default: %(default)s)")  # noqa: E501
-        parser.add_argument('--sample_img_interval', default=10, type=int, help="interval in which to sample and log images (default: %(default)s)")
-        parser.add_argument('--train_batch_size', default=64, type=int, help="train batch size (default: %(default)s)")
-        parser.add_argument('--test_batch_size', default=64, type=int, help="test batch size (default: %(default)s)")
+        parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--sample-img-interval', default=10, type=int, help="interval in which to sample and log images (default: %(default)s)")
+        parser.add_argument('--train-batch-size', default=64, type=int, help="train batch size (default: %(default)s)")
+        parser.add_argument('--test-batch-size', default=64, type=int, help="test batch size (default: %(default)s)")
         parser.add_argument('--validate', default=False, action='store_true', help="whether to validate (default: %(default)s)")
         parser.add_argument('--lr', default=1e-4, type=float, help="lr of deep part (default: %(default)s)")
-        parser.add_argument('--pgm_lr', default=5e-3, type=float, help="lr of pgm (default: %(default)s)")
+        parser.add_argument('--pgm-lr', default=5e-3, type=float, help="lr of pgm (default: %(default)s)")
         parser.add_argument('--l2', default=0., type=float, help="weight decay (default: %(default)s)")
-        parser.add_argument('--use_amsgrad', default=False, action='store_true', help="use amsgrad? (default: %(default)s)")
-        parser.add_argument('--train_crop_type', default='random', choices=['random', 'center'], help="how to crop training images (default: %(default)s)")
-
+        parser.add_argument('--use-amsgrad', default=False, action='store_true', help="use amsgrad? (default: %(default)s)")
+        parser.add_argument('--train-crop-type', default='random', choices=['random', 'center'], help="how to crop training images (default: %(default)s)")
         return parser

@@ -1,19 +1,31 @@
+import argparse
+import logging
+import os
+import warnings
+import sys
+
+from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import TensorBoardLogger
+
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
-if __name__ == '__main__':
-    from pytorch_lightning import Trainer
-    from pytorch_lightning.loggers import TensorBoardLogger
-    import argparse
-    import os
 
-    import warnings
-
+def main():
     exp_parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     exp_parser.add_argument('--experiment', '-e', help='which experiment to load', choices=tuple(EXPERIMENT_REGISTRY.keys()))
     exp_parser.add_argument('--model', '-m', help='which model to load', choices=tuple(MODEL_REGISTRY.keys()))
+    exp_parser.add_argument('-v', '--verbosity', action="count", default=0,
+                            help="increase output verbosity (e.g., -vv is more than -v)")
 
     exp_args, other_args = exp_parser.parse_known_args()
+    if exp_args.verbosity == 1:
+        level = logging.getLevelName('INFO')
+    elif exp_args.verbosity >= 2:
+        level = logging.getLevelName('DEBUG')
+    else:
+        level = logging.getLevelName('WARNING')
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=level)
 
     exp_class = EXPERIMENT_REGISTRY[exp_args.experiment]
     model_class = MODEL_REGISTRY[exp_args.model]
@@ -64,3 +76,7 @@ if __name__ == '__main__':
     with warnings.catch_warnings():
         warnings.simplefilter("once")
         trainer.fit(experiment)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

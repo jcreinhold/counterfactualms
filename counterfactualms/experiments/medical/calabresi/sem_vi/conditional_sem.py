@@ -1,12 +1,10 @@
 import torch
 import pyro
-
-from pyro.nn import pyro_method
+from pyro.nn import pyro_method, DenseNN
 from pyro.distributions import Normal, Bernoulli, TransformedDistribution # noqa: F401
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
-from pyro.nn import DenseNN
 
+from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
 from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
 
