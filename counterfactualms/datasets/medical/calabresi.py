@@ -2,9 +2,7 @@ from torch.utils.data.dataset import Dataset
 from skimage.io import imread
 import numpy as np
 import pandas as pd
-import os
 
-import torch
 import torchvision as tv
 
 
@@ -12,22 +10,18 @@ class CalabresiDataset(Dataset):
     def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), downsample:int=None):
         super().__init__()
         self.csv_path = csv_path
-        df = pd.read_csv(csv_path)
-        self.num_items = len(df)
-        self.metrics = {col: torch.as_tensor(df[col]).float() for col in df.columns}
-
+        self.csv = pd.read_csv(csv_path)
         self.crop_type = crop_type
         self.crop_size = crop_size
-
         self.downsample = downsample
+        self.resize = None if downsample is None else [cs // downsample for cs in self.crop_size]
 
     def __len__(self):
-        return self.num_items
+        return len(self.csv)
 
     def __getitem__(self, index):
-        item = {col: values[index] for col, values in self.metrics.items()}
-
-        img_path = os.path.join(self.base_path, '{}_T1_unbiased_brain_rigid_to_mni.png'.format(int(item['eid'])))
+        row = self.csv.loc[index]
+        img_path = row['filename']
         img = imread(img_path, as_gray=True)
 
         transform_list = []
@@ -38,15 +32,34 @@ class CalabresiDataset(Dataset):
             elif self.crop_type == 'random':
                 transform_list += [tv.transforms.RandomCrop(self.crop_size)]
             else:
-                raise ValueError('unknwon crop type: {}'.format(self.crop_type))
+                raise ValueError(f'unknown crop type: {self.crop_type}')
 
-        if self.downsample is not None and self.downsample > 1:
-            transform_list += [tv.transforms.Resize(np.array(self.crop_size) // self.downsample)]
+        if self.resize:
+            transform_list += [tv.transforms.Resize(self.resize)]
 
         transform_list += [tv.transforms.ToTensor()]
-
         img = tv.transforms.Compose(transform_list)(img)
-
+        item = self._convert_row(row)
         item['image'] = img
-
         return item
+
+    @staticmethod
+    def _convert_row(row):
+        type = {'HC': 0, 'RRMS': 1, 'SPMS': 1}
+        sex = {'M': 0, 'F': 1}
+        relapse = {np.nan: np.nan, 'N': 0, 'Y': 1}
+        out = dict(
+            age=row['age'],
+            brain_volume=row['brain_volume'],
+            duration=row['duration'],
+            edss=row['edss'],
+            image=None,
+            relapse=relapse[row['relapse_last30days']],
+            scan=row['scan'],
+            sex=sex[row['sex']],
+            slice_number=row['slice_number'],
+            subject=row['subject'],
+            type=type[row['type']],
+            ventricle_volume=row['ventricle_volume']
+        )
+        return out

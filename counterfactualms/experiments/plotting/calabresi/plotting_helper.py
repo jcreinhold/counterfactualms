@@ -35,8 +35,8 @@ base_path = f'{CALABRESI_DATA_PATH}/imgs/'
 downsample = 3
 calabresi_test = CalabresiDataset(data_dir, crop_type='center', downsample=downsample)
 
-from counterfactualms.experiments.medical import calabresi # noqa: F401
-from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
+from counterfactualms.experiments.medical import calabresi  # noqa: F401
+from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
 
 var_name = {'ventricle_volume': 'v', 'brain_volume': 'b', 'sex': 's', 'age': 'a'}
 value_fmt = {

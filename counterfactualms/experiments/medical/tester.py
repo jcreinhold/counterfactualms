@@ -1,4 +1,4 @@
-from counterfactualms.experiments.medical import calabresi
+from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
 import torch

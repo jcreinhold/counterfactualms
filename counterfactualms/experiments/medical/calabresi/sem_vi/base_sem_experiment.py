@@ -12,13 +12,16 @@ from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, Spline
 )
-from pyro.distributions import LowRankMultivariateNormal, MultivariateNormal, Normal, TransformedDistribution  # noqa: F401
+from pyro.distributions import (
+    LowRankMultivariateNormal, MultivariateNormal, Normal, TransformedDistribution  # noqa: F401
+)
 from counterfactualms.arch.medical import Decoder, Encoder
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
 from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
 
-from counterfactualms.distributions.deep import DeepMultivariateNormal, DeepIndepNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
-
+from counterfactualms.distributions.deep import (
+    DeepMultivariateNormal, DeepIndepNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
+)
 import numpy as np
 
 from counterfactualms.experiments.medical.base_experiment import (
@@ -130,7 +133,7 @@ class BaseVISEM(BaseSEM):
             torch.nn.init.normal_(self.decoder.logdiag_head.bias, self.logstd_init, 1e-1)
             self.decoder.logdiag_head.bias.requires_grad = True
         else:
-            raise ValueError('unknown  ')
+            raise ValueError(f'unknown decoder type {self.decoder_type}.')
 
         # encoder parts
         self.encoder = Encoder(num_convolutions=self.num_convolutions, filters=self.enc_filters, latent_dim=self.latent_dim, input_size=self.img_shape)
@@ -245,7 +248,7 @@ class BaseVISEM(BaseSEM):
         return exogeneous
 
     @pyro_method
-    def reconstruct(self, x, age, sex, ventricle_volume, brain_volume, num_particles: int = 1):
+    def reconstruct(self, x, age, sex, ventricle_volume, brain_volume, num_particles:int=1):
         obs = {'x': x, 'sex': sex, 'age': age, 'ventricle_volume': ventricle_volume, 'brain_volume': brain_volume}
         z_dist = pyro.poutine.trace(self.guide).get_trace(**obs).nodes['z']['fn']
 
@@ -258,7 +261,7 @@ class BaseVISEM(BaseSEM):
         return torch.stack(recons).mean(0)
 
     @pyro_method
-    def counterfactual(self, obs: Mapping, condition: Mapping = None, num_particles: int = 1):
+    def counterfactual(self, obs:Mapping, condition:Mapping=None, num_particles:int=1):
         _required_data = ('x', 'sex', 'age', 'ventricle_volume', 'brain_volume')
         assert set(obs.keys()) == set(_required_data), 'got: {}'.format(tuple(obs.keys()))
 

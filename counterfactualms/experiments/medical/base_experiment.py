@@ -167,11 +167,9 @@ class BaseCovariateExperiment(pl.LightningModule):
     def prepare_data(self):
         downsample = None if self.hparams.downsample == -1 else self.hparams.downsample
         train_crop_type = self.hparams.train_crop_type if hasattr(self.hparams, 'train_crop_type') else 'random'
-        split_dir = self.hparams.split_dir if hasattr(self.hparams, 'split_dir') else '/vol/biomedic2/np716/data/gemini/calabresi/ventricle_brain/'
-        data_dir = self.hparams.data_dir if hasattr(self.hparams, 'data_dir') else '/vol/biomedic2/bglocker/gemini/UKBB/t0/'
-        self.calabresi_train = CalabresiDataset(f'{split_dir}/train.csv', base_path=data_dir, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
-        self.calabresi_val = CalabresiDataset(f'{split_dir}/val.csv', base_path=data_dir, crop_type='center', downsample=downsample)
-        self.calabresi_test = CalabresiDataset(f'{split_dir}/test.csv', base_path=data_dir, crop_type='center', downsample=downsample)
+        self.calabresi_train = CalabresiDataset(self.hparams.train_csv, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
+        self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_type='center', downsample=downsample)
+        self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_type='center', downsample=downsample)
 
         self.torch_device = self.trainer.root_gpu if self.trainer.on_gpu else self.trainer.root_device
 
