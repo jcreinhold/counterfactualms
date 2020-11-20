@@ -150,9 +150,10 @@ class BaseCovariateExperiment(pl.LightningModule):
     def prepare_data(self):
         downsample = None if self.hparams.downsample == -1 else self.hparams.downsample
         train_crop_type = self.hparams.train_crop_type if hasattr(self.hparams, 'train_crop_type') else 'random'
-        self.calabresi_train = CalabresiDataset(self.hparams.train_csv, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
-        self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_type='center', downsample=downsample)
-        self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_type='center', downsample=downsample)
+        crop_size = self.hparams.crop_size if hasattr(self.hparams, 'crop_size') else (192, 192)
+        self.calabresi_train = CalabresiDataset(self.hparams.train_csv, crop_size=crop_size, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
+        self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_size=crop_size, crop_type='center', downsample=downsample)
+        self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_size=crop_size, crop_type='center', downsample=downsample)
 
         self.torch_device = self.trainer.root_gpu if self.trainer.on_gpu else self.trainer.root_device
 
@@ -572,6 +573,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--crop-size', default=(192,192), type=int, nargs=2, help="size of patch to take from image (default: %(default)s)")
         parser.add_argument('--sample-img-interval', default=10, type=int, help="interval in which to sample and log images (default: %(default)s)")
         parser.add_argument('--train-batch-size', default=256, type=int, help="train batch size (default: %(default)s)")
         parser.add_argument('--test-batch-size', default=64, type=int, help="test batch size (default: %(default)s)")

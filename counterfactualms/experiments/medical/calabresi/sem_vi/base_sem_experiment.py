@@ -1,5 +1,5 @@
 import logging
-from typing import Mapping
+from typing import Mapping, Tuple
 
 import numpy as np
 import pyro
@@ -53,11 +53,12 @@ class Lambda(torch.nn.Module):
 class BaseVISEM(BaseSEM):
     context_dim = 0  # number of context dimensions for decoder
 
-    def __init__(self, latent_dim:int, logstd_init:float=-5, enc_filters:str=(16,32,64,128),
-                 dec_filters:str=(128,64,32,16), num_convolutions:int=2, use_upconv:bool=False,
-                 decoder_type:str='fixed_var', decoder_cov_rank:int=10, **kwargs):
+    def __init__(self, latent_dim:int, logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
+                 dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=2, use_upconv:bool=False,
+                 decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(192,192), **kwargs):
         super().__init__(**kwargs)
-        self.img_shape = (1,192//self.downsample,192//self.downsample) if self.downsample > 0 else (1,192,192)
+        img_shape_ = tuple([imsz//self.downsample for imsz in img_shape] if self.downsample > 0 else img_shape)
+        self.img_shape = (1,) + img_shape_
         self.latent_dim = latent_dim
         self.logstd_init = logstd_init
         self.enc_filters = enc_filters

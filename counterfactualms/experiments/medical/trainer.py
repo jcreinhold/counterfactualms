@@ -4,7 +4,7 @@ import os
 import warnings
 import sys
 
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import TensorBoardLogger
 import torch
 
@@ -18,6 +18,7 @@ def main():
     exp_parser.add_argument('--model', '-m', help='which model to load', choices=tuple(MODEL_REGISTRY.keys()))
     exp_parser.add_argument('--model-path', '-mp', help='pre-trained model to load',
                             default='/iacl/pg20/jacobr/calabresi/models/pretrained.ckpt', type=str)
+    exp_parser.add_argument('--seed', default=1337, type=int, help='random seed')
     exp_parser.add_argument('-v', '--verbosity', action="count", default=0,
                             help="increase output verbosity (e.g., -vv is more than -v)")
 
@@ -73,11 +74,14 @@ def main():
 
     trainer = Trainer.from_argparse_args(lightning_args)
 
-    model = model_class(**vars(model_params))
+    model_dict = vars(model_params)
+    model_dict['img_shape'] = args.crop_size
+    model = model_class(**model_dict)
     if exp_args.model_path is not None:
         state_dict = torch.load(exp_args.model_path, map_location=torch.device('cpu'))['state_dict']
         model.load_state_dict(state_dict, strict=False)
     experiment = exp_class(hparams, model)
+    seed_everything(exp_args.seed)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
