@@ -12,6 +12,8 @@ import torch
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
+logger = logging.getLogger(__name__)
+
 
 def main():
     exp_parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -64,8 +66,8 @@ def main():
 
     lightning_args = groups['lightning_options']
 
-    logger = TensorBoardLogger(lightning_args.default_root_dir, name=f'{exp_args.experiment}/{exp_args.model}')
-    lightning_args.logger = logger
+    tb_logger = TensorBoardLogger(lightning_args.default_root_dir, name=f'{exp_args.experiment}/{exp_args.model}')
+    lightning_args.logger = tb_logger
 
     hparams = groups['experiment']
     model_params = groups['model']
@@ -79,11 +81,20 @@ def main():
     model_dict['img_shape'] = args.crop_size
     model = model_class(**model_dict)
     if exp_args.model_path is not None:
-        ckpt = torch.load(args.model_path, map_location=torch.device('cpu'))
+        ckpt = torch.load(exp_args.model_path, map_location=torch.device('cpu'))
+        state_dict = ckpt['state_dict']
+        model_state_dict = model.state_dict()
         new_state_dict = OrderedDict()
-        for key, value in ckpt['state_dict'].items():
-            new_key = key.replace('pyro_model.', '')
-            new_state_dict[new_key] = value
+        for k in state_dict:
+            new_key = k.replace('pyro_model.', '')
+            if new_key in model_state_dict:
+                if state_dict[k].shape != model_state_dict[new_key].shape:
+                    logger.info(f"Skip loading parameter: {new_key}, "
+                                f"required shape: {model_state_dict[new_key].shape}, "
+                                f"loaded shape: {state_dict[k].shape}")
+                    new_state_dict[new_key] = model_state_dict[new_key]
+            else:
+                logger.info(f"Dropping parameter {k}")
         model.load_state_dict(new_state_dict, strict=False)
     experiment = exp_class(hparams, model)
     seed_everything(exp_args.seed)
