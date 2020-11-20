@@ -9,7 +9,7 @@ from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment i
 
 
 class ConditionalVISEM(BaseVISEM):
-    context_dim = 3  # number of context dimensions for decoder (3 b/c brain vol, ventricle vol, and edss)
+    context_dim = 4  # number of context dimensions for decoder (4 b/c brain vol, ventricle vol, score, duration)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -28,11 +28,11 @@ class ConditionalVISEM(BaseVISEM):
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        # edss flow
-        edss_net = DenseNN(1, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
-        self.edss_flow_components = ConditionalAffineTransform(context_nn=edss_net, event_dim=0)
-        self.edss_flow_transforms = [
-            self.edss_flow_components, self.edss_flow_constraint_transforms
+        # score flow
+        score_net = DenseNN(1, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        self.score_flow_components = ConditionalAffineTransform(context_nn=score_net, event_dim=0)
+        self.score_flow_transforms = [
+            self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
         # ventricle_volume flow
@@ -75,43 +75,45 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.duration_flow_components
         duration_ = self.duration_flow_constraint_transforms.inv(duration)
 
-        edss_context = torch.cat([duration_], 1)
-        edss_base_dist = Normal(self.edss_base_loc, self.edss_base_scale).to_event(1)
-        edss_dist = ConditionalTransformedDistribution(edss_base_dist, self.edss_flow_transforms).condition(edss_context)  # noqa: E501
-        edss = pyro.sample('edss', edss_dist)
-        _ = self.edss_flow_components
+        score_context = torch.cat([duration_], 1)
+        score_base_dist = Normal(self.score_base_loc, self.score_base_scale).to_event(1)
+        score_dist = ConditionalTransformedDistribution(score_base_dist, self.score_flow_transforms).condition(score_context)  # noqa: E501
+        score = pyro.sample('score', score_dist)
+        _ = self.score_flow_components
 
-        return age, sex, ventricle_volume, brain_volume, duration, edss
+        return age, sex, ventricle_volume, brain_volume, duration, score
 
     # no arguments because model is called with condition decorator
     @pyro_method
     def model(self):
-        age, sex, ventricle_volume, brain_volume, duration, edss = self.pgm_model()
+        age, sex, ventricle_volume, brain_volume, duration, score = self.pgm_model()
 
         ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
-        edss_ = self.edss_flow_constraint_transforms.inv(edss)
+        duration_ = self.duration_flow_constraint_transforms.inv(duration)
+        score_ = self.score_flow_constraint_transforms.inv(score)
 
         z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
 
-        latent = torch.cat([z, ventricle_volume_, brain_volume_, edss_], 1)
+        latent = torch.cat([z, ventricle_volume_, brain_volume_, score_, duration_], 1)
 
         x_dist = self._get_transformed_x_dist(latent)
 
         x = pyro.sample('x', x_dist)
 
-        return x, z, age, sex, ventricle_volume, brain_volume, duration, edss
+        return x, z, age, sex, ventricle_volume, brain_volume, duration, score
 
     @pyro_method
-    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, edss):
+    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score):
         with pyro.plate('observations', x.shape[0]):
             hidden = self.encoder(x)
 
             ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
             brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
-            edss_ = self.edss_flow_constraint_transforms.inv(edss)
+            duration_ = self.duration_flow_constraint_transforms.inv(duration)
+            score_ = self.score_flow_constraint_transforms.inv(score)
 
-            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, edss_], 1)
+            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, score_, duration_], 1)
 
             latent_dist = self.latent_encoder.predict(hidden)
 

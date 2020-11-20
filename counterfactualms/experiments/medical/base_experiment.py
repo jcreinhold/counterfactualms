@@ -162,8 +162,8 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.brain_volume_range = brain_volumes.repeat(3).unsqueeze(1)
         ventricle_volumes = 10000. + 50000 * torch.arange(3, dtype=torch.float, device=self.torch_device)
         self.ventricle_volume_range = ventricle_volumes.repeat_interleave(3).unsqueeze(1)
-        edsss = torch.arange(-1., 6., dtype=torch.float, device=self.torch_device)
-        self.edss_range = edsss.repeat_interleave(3).unsqueeze(1)
+        scores = torch.arange(-1., 6., dtype=torch.float, device=self.torch_device)
+        self.score_range = scores.repeat_interleave(3).unsqueeze(1)
         self.z_range = torch.randn([1, self.hparams.latent_dim], dtype=torch.float, device=self.torch_device).repeat((9, 1))
 
         age = torch.from_numpy(self.calabresi_train.csv['age'].to_numpy())
@@ -182,16 +182,16 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.duration_flow_lognorm_loc = (duration.log().mean().to(self.torch_device).float())
         self.pyro_model.duration_flow_lognorm_scale = (duration.log().std().to(self.torch_device).float())
 
-        edss = torch.from_numpy(self.calabresi_train.csv['edss'].to_numpy())
-        self.pyro_model.edss_flow_lognorm_loc = (edss.log().mean().to(self.torch_device).float())
-        self.pyro_model.edss_flow_lognorm_scale = (edss.log().std().to(self.torch_device).float())
+        score = torch.from_numpy(self.calabresi_train.csv['score'].to_numpy())
+        self.pyro_model.score_flow_lognorm_loc = (score.log().mean().to(self.torch_device).float())
+        self.pyro_model.score_flow_lognorm_scale = (score.log().std().to(self.torch_device).float())
 
         if self.hparams.validate:
             logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')
             logger.info(f'set brain_volume_flow_lognorm {self.pyro_model.brain_volume_flow_lognorm.loc} +/- {self.pyro_model.brain_volume_flow_lognorm.scale}')
             logger.info(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
             logger.info(f'set duration_flow_lognorm {self.pyro_model.duration_flow_lognorm.loc} +/- {self.pyro_model.duration_flow_lognorm.scale}')  # noqa: E501
-            logger.info(f'set edss_flow_lognorm {self.pyro_model.edss_flow_lognorm.loc} +/- {self.pyro_model.edss_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set score_flow_lognorm {self.pyro_model.score_flow_lognorm.loc} +/- {self.pyro_model.score_flow_lognorm.scale}')  # noqa: E501
 
     def configure_optimizers(self):
         pass
@@ -242,14 +242,14 @@ class BaseCovariateExperiment(pl.LightningModule):
             'ventricle_volume': sample_trace.nodes['ventricle_volume']['value'].cpu(),
             'age': sample_trace.nodes['age']['value'].cpu(),
             'sex': sample_trace.nodes['sex']['value'].cpu(),
-            'edss': sample_trace.nodes['edss']['value'].cpu(),
+            'score': sample_trace.nodes['score']['value'].cpu(),
             'duration': sample_trace.nodes['duration']['value'].cpu(),
         }
 
         cond_data = {
             'brain_volume': self.brain_volume_range.repeat(self.hparams.test_batch_size, 1),
             'ventricle_volume': self.ventricle_volume_range.repeat(self.hparams.test_batch_size, 1),
-            'edss': self.edss_range.repeat(self.hparams.test_batch_size, 1),
+            'score': self.score_range.repeat(self.hparams.test_batch_size, 1),
             'z': torch.randn([self.hparams.test_batch_size, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat_interleave(9, 0)
         }
         sample_trace = pyro.poutine.trace(pyro.condition(self.pyro_model.sample, data=cond_data)).get_trace(9 * self.hparams.test_batch_size)
@@ -259,7 +259,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             'ventricle_volume': sample_trace.nodes['ventricle_volume']['value'].cpu(),
             'age': sample_trace.nodes['age']['value'].cpu(),
             'sex': sample_trace.nodes['sex']['value'].cpu(),
-            'edss': sample_trace.nodes['edss']['value'].cpu(),
+            'score': sample_trace.nodes['score']['value'].cpu(),
             'duration': sample_trace.nodes['duration']['value'].cpu(),
         }
 
@@ -328,8 +328,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             'do(sex=1)': {'sex': torch.ones_like(batch['sex'])},
             'do(duration=0)': {'duration': torch.zeros_like(batch['type']) + 1e-5},
             'do(duration=12)': {'duration': torch.ones_like(batch['type']) * 12.},
-            'do(edss=0)': {'type': torch.ones_like(batch['type']) + 1e-5},
-            'do(edss=6)': {'type': torch.ones_like(batch['type']) * 6.},
+            'do(score=0)': {'type': torch.ones_like(batch['type']) + 1e-5},
+            'do(score=6)': {'type': torch.ones_like(batch['type']) * 6.},
             'do(brain_volume=800000, ventricle_volume=224)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 800000,
                                                               'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 110000},
             'do(brain_volume=1600000, ventricle_volume=10000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 1600000,
@@ -392,11 +392,11 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         self.logger.experiment.add_figure(tag, fig, self.current_epoch)
 
-    def build_reconstruction(self, x, age, sex, ventricle_volume, brain_volume, duration, edss,
+    def build_reconstruction(self, x, age, sex, ventricle_volume, brain_volume, duration, score,
                              tag='reconstruction'):
         obs = {'x': x, 'sex': sex, 'age': age,
                'ventricle_volume': ventricle_volume, 'brain_volume': brain_volume,
-               'duration': duration, 'edss': edss}
+               'duration': duration, 'score': score}
 
         recon = self.pyro_model.reconstruct(**obs, num_particles=self.hparams.num_sample_particles)
         self.log_img_grid(tag, torch.cat([x, recon], 0))
@@ -405,7 +405,7 @@ class BaseCovariateExperiment(pl.LightningModule):
     @staticmethod
     def _check_observation(obs):
         keys = obs.keys()
-        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'edss', 'duration'}
+        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'score', 'duration'}
         assert required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
     def build_counterfactual(self, tag, obs, conditions, absolute=None):
@@ -416,8 +416,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_kdes = {'orig': {'ventricle_volume': obs['ventricle_volume']}}
         elif absolute == 'ventricle_volume':
             sampled_kdes = {'orig': {'brain_volume': obs['brain_volume']}}
-        elif absolute == 'edss':
-            sampled_kdes = {'orig': {'edss': obs['edss']}}
+        elif absolute == 'score':
+            sampled_kdes = {'orig': {'score': obs['score']}}
         elif absolute == 'duration':
             sampled_kdes = {'orig': {'duration': obs['duration']}}
         else:
@@ -429,7 +429,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             counter = counterfactual['x']
             sampled_brain_volume = counterfactual['brain_volume']
             sampled_ventricle_volume = counterfactual['ventricle_volume']
-            sampled_edss = counterfactual['edss']
+            sampled_score = counterfactual['score']
             sampled_duration = counterfactual['duration']
 
             imgs.append(counter)
@@ -437,8 +437,8 @@ class BaseCovariateExperiment(pl.LightningModule):
                 sampled_kdes[name] = {'ventricle_volume': sampled_ventricle_volume}
             elif absolute == 'ventricle_volume':
                 sampled_kdes[name] = {'brain_volume': sampled_brain_volume}
-            elif absolute == 'edss':
-                sampled_kdes[name] = {'edss': sampled_edss}
+            elif absolute == 'score':
+                sampled_kdes[name] = {'score': sampled_score}
             elif absolute == 'duration':
                 sampled_kdes[name] = {'duration': sampled_duration}
             else:
@@ -512,15 +512,15 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.build_counterfactual('do(ventricle_volume=x)', obs=obs_batch, conditions=conditions, absolute='ventricle_volume')
 
             conditions = {
-                '0': {'edss': torch.zeros_like(obs_batch['edss']) + 1e-5},
-                '1': {'edss': torch.zeros_like(obs_batch['edss']) + 1.},
-                '2': {'edss': torch.zeros_like(obs_batch['edss']) + 2.},
-                '3': {'edss': torch.zeros_like(obs_batch['edss']) + 3.},
-                '4': {'edss': torch.zeros_like(obs_batch['edss']) + 4.},
-                '5': {'edss': torch.zeros_like(obs_batch['edss']) + 5.},
-                '6': {'edss': torch.zeros_like(obs_batch['edss']) + 6.}
+                '0': {'score': torch.zeros_like(obs_batch['score']) + 1e-5},
+                '1': {'score': torch.zeros_like(obs_batch['score']) + 1.},
+                '2': {'score': torch.zeros_like(obs_batch['score']) + 2.},
+                '3': {'score': torch.zeros_like(obs_batch['score']) + 3.},
+                '4': {'score': torch.zeros_like(obs_batch['score']) + 4.},
+                '5': {'score': torch.zeros_like(obs_batch['score']) + 5.},
+                '6': {'score': torch.zeros_like(obs_batch['score']) + 6.}
             }
-            self.build_counterfactual('do(edss=x)', obs=obs_batch, conditions=conditions, absolute='edss')
+            self.build_counterfactual('do(score=x)', obs=obs_batch, conditions=conditions, absolute='score')
 
             conditions = {
                 '0': {'duration': torch.zeros_like(obs_batch['duration']) + 1e-5},

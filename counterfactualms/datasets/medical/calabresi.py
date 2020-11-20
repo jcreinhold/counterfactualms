@@ -16,6 +16,9 @@ class CalabresiDataset(Dataset):
         csv['relapse'] = csv['relapse'].map({np.nan: -1., 'N': 0., 'Y': 1.})
         csv['duration'] = csv['duration'].fillna(0.) + eps
         csv['edss'] = csv['edss'].fillna(0.) + eps
+        csv['msss'] = csv['msss'].fillna(0.) + eps
+        csv['fss'] = csv['fss'].fillna(0.) + eps
+        csv['score'] = (csv['edss'] + csv['msss'] + csv['fss']) / 3.
         csv['sex'] = csv['sex'].map({'M': 0., 'F': 1.})
         csv['type'] = csv['type'].map({'HC': 0., 'RRMS': 1., 'SPMS': 1., 'PPMS': 1.})
         csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32)
@@ -68,5 +71,5 @@ class CalabresiDataset(Dataset):
         item['duration'] = torch.as_tensor(item['duration'], dtype=torch.float32)
         item['brain_volume'] = torch.as_tensor(item['brain_volume'], dtype=torch.float32)
         item['ventricle_volume'] = torch.as_tensor(item['ventricle_volume'], dtype=torch.float32)
-        item['edss'] = torch.as_tensor(item['edss'], dtype=torch.float32)
+        item['score'] = torch.as_tensor(item['score'], dtype=torch.float32)
         return item
