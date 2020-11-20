@@ -58,7 +58,8 @@ value_fmt = {
     'ventricle_volume': lambda s: rf'{float(s)/1000:.3g}\,\mathrm{{ml}}',
     'brain_volume': lambda s: rf'{float(s)/1000:.3g}\,\mathrm{{ml}}',
     'age': lambda s: rf'{int(s):d}\,\mathrm{{y}}',
-    'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)])
+    'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)]),
+    'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)])
 }
 
 def setup(model_paths):
@@ -117,15 +118,18 @@ def prep_data(batch):
     brain_volume = batch['brain_volume'].unsqueeze(0).unsqueeze(0).float()
     score = batch['score'].unsqueeze(0).unsqueeze(0).float()
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
+    type = batch['type'].unsqueeze(0).unsqueeze(0).float()
     x = x.float()
     return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
-            'brain_volume': brain_volume, 'score': score, 'duration': duration}
+            'brain_volume': brain_volume, 'score': score, 'duration': duration, 'type': type}
 
 
 def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32):
     fig, ax = plt.subplots(3, len(interventions), figsize=(1.6 * len(interventions), 5), gridspec_kw=dict(wspace=0, hspace=0))
     lim = 0
     orig_data = prep_data(calabresi_test[idx])
+    ms_type = orig_data['type']
+    del orig_data['type']
     imgs = []
     for intervention in interventions:
         pyro.clear_param_store()
@@ -150,6 +154,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
 
+    orig_data['type'] = ms_type
     suptitle = r'$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}; d={duration}; e={score}$'.format(
         **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
@@ -162,6 +167,8 @@ def interactive_plot(model_name):
     def plot_intervention(intervention, idx, num_samples=32):
         fig, ax = plt.subplots(1, 4, figsize=(10, 2.5), gridspec_kw=dict(wspace=0, hspace=0))
         orig_data = prep_data(calabresi_test[idx])
+        ms_type = orig_data['type']
+        del orig_data['type']
         x_test = orig_data['x']
         pyro.clear_param_store()
         cond = {k: torch.tensor([[v]]) for k, v in intervention.items()}
@@ -180,8 +187,9 @@ def interactive_plot(model_name):
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
 
-        att_str = '$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$d={duration}$\n$e={score}$'.format(
-            **{att: value_fmt[att](orig_data[att].item()) for att in variables}
+        orig_data['type'] = ms_type
+        att_str = '$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$d={duration}$\n$e={score}$\n$t={type}$'.format(
+            **{att: value_fmt[att](orig_data[att].item()) for att in variables + ('type',)}
         )
 
         ax[0].text(0.5, 0.5, att_str, horizontalalignment='center',
@@ -221,9 +229,10 @@ def interactive_plot(model_name):
         do_ventricle_volume=Checkbox(description='do(ventricle_volume)'),
         duration=FloatSlider(min=1e-5, max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
         do_duration=Checkbox(description='do(duration)'),
-        score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='EDSS:', style={'description_width': 'initial'}),
+        score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
         do_score=Checkbox(description='do(score)'),
     )
     ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+1]]) for i in range(1,2*len(variables),2)]), w.children[-1]])
     display(ui)
     w.update()
+
