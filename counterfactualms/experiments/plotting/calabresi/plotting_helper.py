@@ -3,7 +3,6 @@ from functools import partial
 from glob import glob
 import inspect
 import os
-from pathlib import Path
 import traceback
 import warnings
 
@@ -27,13 +26,14 @@ diff_cm = 'seismic'
 
 from counterfactualms.datasets.medical.calabresi import CalabresiDataset
 
-calabresi = Path('/iacl/pg20/jacobr/calabresi/')
+calabresi = '/iacl/pg20/jacobr/calabresi/'
 version = 3
-checkpoint_path = glob(calabresi/f"runs/SVIExperiment/ConditionalSVI/version_{version}/checkpoints/*.ckpt")[0]
-csv = calabresi/"png/csv/test_png.csv"
+checkpoint_path = glob(calabresi+f"run/SVIExperiment/ConditionalVISEM/version_{version}/checkpoints/*.ckpt")[0]
+csv = calabresi+"png/csv/test_png.csv"
 downsample = 2
 crop_size = (224, 224)
 calabresi_test = CalabresiDataset(csv, crop_type='center', downsample=downsample, crop_size=crop_size)
+n_rot90 = 3
 
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
@@ -45,7 +45,7 @@ variables = (
     'ventricle_volume',
     'duration',
     'edss',
-    'type'
+    'type',
     'relapse',
 )
 var_name = {
@@ -61,12 +61,12 @@ var_name = {
 value_fmt = {
     'edss': lambda s: rf'{float(s):.4g}',
     'duration': lambda s: rf'{float(s):.4g}\,\mathrm{{y}}',
-    'type': lambda s: '{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
-    'relapse': lambda s: '{}'.format(['\mathrm{N}', '\mathrm{Y}'][int(s)]),
+    'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
+    'relapse': lambda s: r'{}'.format(['\mathrm{N}', '\mathrm{Y}'][int(s)]),
     'ventricle_volume': lambda s: rf'{float(s)/1000:.4g}\,\mathrm{{ml}}',
     'brain_volume': lambda s: rf'{float(s)/1000:.4g}\,\mathrm{{ml}}',
     'age': lambda s: rf'{int(s):d}\,\mathrm{{y}}',
-    'sex': lambda s: '{}'.format(['\mathrm{female}', '\mathrm{male}'][int(s)])
+    'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)])
 }
 
 def fmt_intervention(intervention):
@@ -99,13 +99,14 @@ loaded_models = {}
 for exp in experiments:
     try:
         ckpt = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-        hparams = ckpt['hparams']
+        hparams = ckpt['hyper_parameters']
         model_class = MODEL_REGISTRY[hparams['model']]
         model_params = {
             k: v for k, v in hparams.items() if (k in inspect.signature(model_class.__init__).parameters
                                                  or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
                                                  or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
         }
+        model_params['img_shape'] = hparams['crop_size']
         new_state_dict = OrderedDict()
         for key, value in ckpt['state_dict'].items():
             new_key = key.replace('pyro_model.', '')
@@ -144,22 +145,22 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
         diff = (x_test - x).squeeze()
         if not normalise_all:
             lim = diff.abs().max()
-        ax[0, i].imshow(x_test.squeeze(), 'Greys_r', vmin=0, vmax=255)
+        ax[0, i].imshow(np.rot90(x_test.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
         ax[0, i].set_title(fmt_intervention(intervention))
-        ax[1, i].imshow(x.squeeze(), 'Greys_r', vmin=0, vmax=255)
-        ax[2, i].imshow(diff, 'seismic', clim=[-lim, lim])
+        ax[1, i].imshow(np.rot90(x.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
+        ax[2, i].imshow(np.rot90(diff, n_rot90), 'seismic', clim=[-lim, lim])
         for axi in ax[:, i]:
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
-    
-    suptitle = '$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}; d={duration}; e={edss}; t={type}; r={relapse}$'.format(
+
+    suptitle = r'$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}; d={duration}; e={edss}; t={type}; r={relapse}$'.format(
         **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
     fig.suptitle(suptitle, fontsize=14, y=1.02)
     fig.tight_layout()
     plt.show()
-    
+
 def interactive_plot(model_name):
     def plot_intervention(intervention, idx, num_samples=32):
         fig, ax = plt.subplots(1, 4, figsize=(10, 2.5), gridspec_kw=dict(wspace=0, hspace=0))
@@ -172,17 +173,17 @@ def interactive_plot(model_name):
         diff = (x_test - x).squeeze()
         lim = diff.abs().max()
         ax[1].set_title('Original')
-        ax[1].imshow(x_test.squeeze(), 'Greys_r', vmin=0, vmax=255)
+        ax[1].imshow(np.rot90(x_test.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
         ax[2].set_title(fmt_intervention(intervention))
-        ax[2].imshow(x.squeeze(), 'Greys_r', vmin=0, vmax=255)
+        ax[2].imshow(np.rot90(x.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
         ax[3].set_title('Difference')
-        ax[3].imshow(diff, 'seismic', clim=[-lim, lim])
+        ax[3].imshow(np.rot90(diff, n_rot90), 'seismic', clim=[-lim, lim])
         for axi in ax:
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
 
-        att_str = '$s={sex}\na={age}\nb={brain_volume}\nv={ventricle_volume}\nd={duration}\ne={edss}\nt={type}\nr={relapse}$'.format(
+        att_str = '$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$d={duration}$\n$e={edss}$\n$t={type}$\n$r={relapse}$'.format(
             **{att: value_fmt[att](orig_data[att].item()) for att in variables}
         )
 
@@ -190,7 +191,7 @@ def interactive_plot(model_name):
                       verticalalignment='center', transform=ax[0].transAxes,
                       fontsize=mpl.rcParams['axes.titlesize'])
         plt.show()
-    
+
     from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
     from IPython.display import display
 
@@ -234,7 +235,6 @@ def interactive_plot(model_name):
         edss=FloatSlider(min=0., max=10., step=1., continuous_update=False, description='EDSS:', style={'description_width': 'initial'}),
         do_edss=Checkbox(description='do(edss)'),
     )
-
-    ui = VBox([w.children[0], VBox([HBox([w.children[i + 1], w.children[i + 5]]) for i in range(4)]), w.children[-1]])
+    ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+1]]) for i in range(1,2*len(variables),2)]), w.children[-1]])
     display(ui)
     w.update()

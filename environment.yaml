@@ -95,6 +95,7 @@ dependencies:
   - multidict
   - nbclient
   - nbconvert
+  - nbdejs
   - nbformat
   - nbsphinx
   - nbstripout
