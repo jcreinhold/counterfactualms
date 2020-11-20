@@ -326,9 +326,9 @@ class BaseCovariateExperiment(pl.LightningModule):
             'do(age=120)': {'age': torch.ones_like(batch['age']) * 120},
             'do(sex=0)': {'sex': torch.zeros_like(batch['sex'])},
             'do(sex=1)': {'sex': torch.ones_like(batch['sex'])},
-            'do(duration=0)': {'duration': torch.zeros_like(batch['type'])},
+            'do(duration=0)': {'duration': torch.zeros_like(batch['type']) + 1e-5},
             'do(duration=12)': {'duration': torch.ones_like(batch['type']) * 12.},
-            'do(edss=0)': {'type': torch.ones_like(batch['type'])},
+            'do(edss=0)': {'type': torch.ones_like(batch['type']) + 1e-5},
             'do(edss=6)': {'type': torch.ones_like(batch['type']) * 6.},
             'do(brain_volume=800000, ventricle_volume=224)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 800000,
                                                               'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 110000},
@@ -449,7 +449,6 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def sample_images(self):
         with torch.no_grad():
-            # TODO: redo all this....
             sample_trace = pyro.poutine.trace(self.pyro_model.sample).get_trace(self.hparams.test_batch_size)
 
             samples = sample_trace.nodes['x']['value']
@@ -513,7 +512,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.build_counterfactual('do(ventricle_volume=x)', obs=obs_batch, conditions=conditions, absolute='ventricle_volume')
 
             conditions = {
-                '0': {'edss': torch.zeros_like(obs_batch['edss']) + 0.},
+                '0': {'edss': torch.zeros_like(obs_batch['edss']) + 1e-5},
                 '1': {'edss': torch.zeros_like(obs_batch['edss']) + 1.},
                 '2': {'edss': torch.zeros_like(obs_batch['edss']) + 2.},
                 '3': {'edss': torch.zeros_like(obs_batch['edss']) + 3.},
@@ -524,7 +523,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.build_counterfactual('do(edss=x)', obs=obs_batch, conditions=conditions, absolute='edss')
 
             conditions = {
-                '0': {'duration': torch.zeros_like(obs_batch['duration']) + 0.},
+                '0': {'duration': torch.zeros_like(obs_batch['duration']) + 1e-5},
                 '4': {'duration': torch.zeros_like(obs_batch['duration']) + 4.},
                 '8': {'duration': torch.zeros_like(obs_batch['duration']) + 8.},
                 '12': {'duration': torch.zeros_like(obs_batch['duration']) + 12.}

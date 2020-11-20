@@ -14,8 +14,8 @@ class CalabresiDataset(Dataset):
         csv.drop(['fss', 'msss', 'treatment_propagated', 'treatment'], axis=1, inplace=True)
         csv.rename(columns={'relapse_last30days': 'relapse'}, inplace=True)
         csv['relapse'] = csv['relapse'].map({np.nan: -1., 'N': 0., 'Y': 1.})
-        csv['duration'] = csv['duration'].fillna(eps)
-        csv['edss'] = csv['edss'].fillna(eps)
+        csv['duration'] = csv['duration'].fillna(0.) + eps
+        csv['edss'] = csv['edss'].fillna(0.) + eps
         csv['sex'] = csv['sex'].map({'M': 0., 'F': 1.})
         csv['type'] = csv['type'].map({'HC': 0., 'RRMS': 1., 'SPMS': 1., 'PPMS': 1.})
         csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32)
