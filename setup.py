@@ -3,12 +3,13 @@
 
 from setuptools import setup, find_packages
 
-console_scripts = []
+console_scripts = ['counterfactualms-train=counterfactualms.experiments.medical.trainer:main',
+                   'counterfactualms-test=counterfactualms.experiments.medical.tester:main']
 
 with open('README.md', encoding="utf-8") as f:
     readme = f.read()
 
-with open('LICENSE', encoding="utf-8") as f:
+with open('LICENSE.md', encoding="utf-8") as f:
     license = f.read()
 
 args = dict(

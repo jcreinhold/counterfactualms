@@ -27,7 +27,7 @@ def main():
     elif exp_args.verbosity >= 2:
         level = logging.getLevelName('DEBUG')
     else:
-        level = logging.getLevelName('WARNING')
+        level = logging.getLevelName('ERROR')
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=level)
 
     exp_class = EXPERIMENT_REGISTRY[exp_args.experiment]
@@ -80,7 +80,7 @@ def main():
     experiment = exp_class(hparams, model)
 
     with warnings.catch_warnings():
-        warnings.simplefilter("once")
+        warnings.simplefilter("ignore")
         trainer.fit(experiment)
 
 

@@ -36,7 +36,7 @@ class ConditionalVISEM(BaseVISEM):
         ]
 
         # relapse flow
-        relapse_net = DenseNN(1, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        relapse_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.relapse_flow_components = ConditionalAffineTransform(context_nn=relapse_net, event_dim=0)
         self.relapse_flow_transforms = [
             self.relapse_flow_components, self.relapse_flow_constraint_transforms

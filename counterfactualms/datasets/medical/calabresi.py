@@ -14,10 +14,17 @@ class CalabresiDataset(Dataset):
         csv.drop(['fss', 'msss', 'treatment_propagated', 'treatment'], axis=1, inplace=True)
         csv.rename(columns={'relapse_last30days': 'relapse'}, inplace=True)
         csv['relapse'] = csv['relapse'].map({np.nan: -1., 'N': 0., 'Y': 1.})
-        csv['duration'] = csv['duration'].map({np.nan: 0.})
-        csv['edss'] = csv['edss'].map({np.nan: -1.})
+        csv['duration'] = csv['duration'].fillna(-1.)
+        csv['edss'] = csv['edss'].fillna(-1.)
         csv['sex'] = csv['sex'].map({'M': 0., 'F': 1.})
         csv['type'] = csv['type'].map({'HC': 0., 'RRMS': 1., 'SPMS': 1., 'PPMS': 1.})
+        csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32)
+        csv['brain_volume'] = csv['brain_volume'].astype(np.float32)
+        if csv.isnull().values.any():
+            raise ValueError(
+                'There is either an empty space, nan, or otherwise '
+                f'something wrong in the csv {csv_path}'
+            )
         self.csv = csv
         self.crop_type = crop_type
         self.crop_size = crop_size
@@ -54,12 +61,12 @@ class CalabresiDataset(Dataset):
 
     @staticmethod
     def _prepare_item(item):
-        item['age'] = torch.as_tensor([item['age']], dtype=torch.float32)
-        item['sex'] = torch.as_tensor([item['type']], dtype=torch.float32)
-        item['type'] = torch.as_tensor([item['type']], dtype=torch.float32)
-        item['relapse_last30days'] = torch.as_tensor([item['relapse_last30days']], dtype=torch.float32)
-        item['duration'] = torch.as_tensor([item['duration']], dtype=torch.float32)
-        item['brain_volume'] = torch.as_tensor(['brain_volume'], dtype=torch.float32)
-        item['ventricle_volume'] = torch.as_tensor(['ventricle_volume'], dtype=torch.float32)
-        item['edss'] = torch.as_tensor(['edss'], dtype=torch.float32)
+        item['age'] = torch.as_tensor(item['age'], dtype=torch.float32)
+        item['sex'] = torch.as_tensor(item['type'], dtype=torch.float32)
+        item['type'] = torch.as_tensor(item['type'], dtype=torch.float32)
+        item['relapse'] = torch.as_tensor(item['relapse'], dtype=torch.float32)
+        item['duration'] = torch.as_tensor(item['duration'], dtype=torch.float32)
+        item['brain_volume'] = torch.as_tensor(item['brain_volume'], dtype=torch.float32)
+        item['ventricle_volume'] = torch.as_tensor(item['ventricle_volume'], dtype=torch.float32)
+        item['edss'] = torch.as_tensor(item['edss'], dtype=torch.float32)
         return item

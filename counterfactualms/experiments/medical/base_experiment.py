@@ -178,25 +178,38 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.brain_volume_flow_lognorm_scale = (brain_volume.log().std().to(self.torch_device).float())
 
         duration = torch.from_numpy(self.calabresi_train.csv['duration'].to_numpy())
-        self.pyro_model.duration_flow_lognorm_loc = (duration.log().mean().to(self.torch_device).float())
-        self.pyro_model.duration_flow_lognorm_scale = (duration.log().std().to(self.torch_device).float())
+        self.pyro_model.duration_flow_norm_loc = (duration.mean().to(self.torch_device).float())
+        self.pyro_model.duration_flow_norm_scale = (duration.std().to(self.torch_device).float())
 
         edss = torch.from_numpy(self.calabresi_train.csv['edss'].to_numpy())
-        self.pyro_model.edss_flow_lognorm_loc = (edss.log().mean().to(self.torch_device).float())
-        self.pyro_model.edss_flow_lognorm_scale = (edss.log().std().to(self.torch_device).float())
+        self.pyro_model.edss_flow_norm_loc = (edss.mean().to(self.torch_device).float())
+        self.pyro_model.edss_flow_norm_scale = (edss.std().to(self.torch_device).float())
+
+        relapse = torch.from_numpy(self.calabresi_train.csv['relapse'].to_numpy())
+        self.pyro_model.relapse_flow_norm_loc = (relapse.mean().to(self.torch_device).float())
+        self.pyro_model.relapse_flow_norm_scale = (relapse.std().to(self.torch_device).float())
+
+        type = torch.from_numpy(self.calabresi_train.csv['type'].to_numpy())
+        self.pyro_model.type_flow_norm_loc = (type.mean().to(self.torch_device).float())
+        self.pyro_model.type_flow_norm_scale = (type.std().to(self.torch_device).float())
 
         if self.hparams.validate:
             logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')
             logger.info(f'set brain_volume_flow_lognorm {self.pyro_model.brain_volume_flow_lognorm.loc} +/- {self.pyro_model.brain_volume_flow_lognorm.scale}')
             logger.info(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
-            logger.info(f'set duration_flow_lognorm {self.pyro_model.duration_flow_lognorm.loc} +/- {self.pyro_model.duration_flow_lognorm.scale}')  # noqa: E501
-            logger.info(f'set edss_flow_lognorm {self.pyro_model.edss_flow_lognorm.loc} +/- {self.pyro_model.edss_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set duration_flow_norm {self.pyro_model.duration_flow_norm.loc} +/- {self.pyro_model.duration_flow_norm.scale}')  # noqa: E501
+            logger.info(f'set edss_flow_norm {self.pyro_model.edss_flow_norm.loc} +/- {self.pyro_model.edss_flow_norm.scale}')  # noqa: E501
+            logger.info(f'set relapse_flow_norm {self.pyro_model.relapse_flow_norm.loc} +/- {self.pyro_model.relapse_flow_norm.scale}')  # noqa: E501
+            logger.info(f'set type_flow_norm {self.pyro_model.type_flow_norm.loc} +/- {self.pyro_model.type_flow_norm.scale}')  # noqa: E501
 
     def configure_optimizers(self):
         pass
 
     def train_dataloader(self):
-        return DataLoader(self.calabresi_train, batch_size=self.train_batch_size, shuffle=True)
+        num_cpus = len(os.sched_getaffinity(0)) // 2
+        on_gpu = torch.cuda.is_available()  # assume if cuda available, we are using it
+        return DataLoader(self.calabresi_train, batch_size=self.train_batch_size,
+                          shuffle=True, num_workers=num_cpus, pin_memory=on_gpu)
 
     def val_dataloader(self):
         self.val_loader = DataLoader(self.calabresi_val, batch_size=self.test_batch_size, shuffle=False)
@@ -359,8 +372,7 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def get_batch(self, loader):
         batch = next(iter(self.val_loader))
-        if self.trainer.on_gpu:
-            batch = self.trainer.transfer_batch_to_gpu(batch, self.torch_device)
+        batch = {k: v.to(self.torch_device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
         return batch
 
     def log_kdes(self, tag, data, save_img=False):
@@ -372,10 +384,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             try:
                 if len(covariates) == 1:
                     (x_n, x), = tuple(covariates.items())
-                    sns.kdeplot(np_val(x), ax=ax[i], shade=True, shade_lowest=False)
+                    sns.kdeplot(x=np_val(x), ax=ax[i], shade=True, thresh=0.05)
                 elif len(covariates) == 2:
                     (x_n, x), (y_n, y) = tuple(covariates.items())
-                    sns.kdeplot(np_val(x), np_val(y), ax=ax[i], shade=True, shade_lowest=False)
+                    sns.kdeplot(x=np_val(x), y=np_val(y), ax=ax[i], shade=True, thresh=0.05)
                     ax[i].set_ylabel(y_n)
                 else:
                     raise ValueError(f'got too many values: {len(covariates)}')
@@ -557,9 +569,9 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
-        parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
-        parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--sample-img-interval', default=10, type=int, help="interval in which to sample and log images (default: %(default)s)")
         parser.add_argument('--train-batch-size', default=256, type=int, help="train batch size (default: %(default)s)")
         parser.add_argument('--test-batch-size', default=64, type=int, help="test batch size (default: %(default)s)")

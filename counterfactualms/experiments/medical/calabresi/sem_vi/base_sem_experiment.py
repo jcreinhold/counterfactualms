@@ -182,17 +182,17 @@ class BaseVISEM(BaseSEM):
         self.register_buffer('brain_volume_flow_lognorm_loc', torch.zeros([], requires_grad=False))
         self.register_buffer('brain_volume_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
-        self.register_buffer('duration_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('duration_flow_lognorm_scale', torch.ones([], requires_grad=False))
+        self.register_buffer('duration_flow_norm_loc', torch.zeros([], requires_grad=False))
+        self.register_buffer('duration_flow_norm_scale', torch.ones([], requires_grad=False))
 
-        self.register_buffer('edss_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('edss_flow_lognorm_scale', torch.ones([], requires_grad=False))
+        self.register_buffer('edss_flow_norm_loc', torch.zeros([], requires_grad=False))
+        self.register_buffer('edss_flow_norm_scale', torch.ones([], requires_grad=False))
 
-        self.register_buffer('relapse_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('relapse_flow_lognorm_scale', torch.ones([], requires_grad=False))
+        self.register_buffer('relapse_flow_norm_loc', torch.zeros([], requires_grad=False))
+        self.register_buffer('relapse_flow_norm_scale', torch.ones([], requires_grad=False))
 
-        self.register_buffer('type_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('type_flow_lognorm_scale', torch.ones([], requires_grad=False))
+        self.register_buffer('type_flow_norm_loc', torch.zeros([], requires_grad=False))
+        self.register_buffer('type_flow_norm_scale', torch.ones([], requires_grad=False))
 
         # age flow
         self.age_flow_components = ComposeTransformModule([Spline(1)])
@@ -207,17 +207,17 @@ class BaseVISEM(BaseSEM):
         self.brain_volume_flow_lognorm = AffineTransform(loc=self.brain_volume_flow_lognorm_loc.item(), scale=self.brain_volume_flow_lognorm_scale.item())
         self.brain_volume_flow_constraint_transforms = ComposeTransform([self.brain_volume_flow_lognorm, ExpTransform()])
 
-        self.duration_flow_lognorm = AffineTransform(loc=self.duration_flow_lognorm_loc.item(), scale=self.duration_flow_lognorm_scale.item())
-        self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_lognorm, ExpTransform()])
+        self.duration_flow_norm = AffineTransform(loc=self.duration_flow_norm_loc.item(), scale=self.duration_flow_norm_scale.item())
+        self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_norm])
 
-        self.edss_flow_lognorm = AffineTransform(loc=self.edss_flow_lognorm_loc.item(), scale=self.edss_flow_lognorm_scale.item())
-        self.edss_flow_constraint_transforms = ComposeTransform([self.edss_flow_lognorm, SigmoidTransform(), AffineTransform(loc=-1., scale=11.)])
+        self.edss_flow_norm = AffineTransform(loc=self.edss_flow_norm_loc.item(), scale=self.edss_flow_norm_scale.item())
+        self.edss_flow_constraint_transforms = ComposeTransform([self.edss_flow_norm, SigmoidTransform(), AffineTransform(loc=-1., scale=11.)])
 
-        self.type_flow_lognorm = AffineTransform(loc=self.type_flow_lognorm_loc.item(), scale=self.type_flow_lognorm_scale.item())
-        self.type_flow_constraint_transforms = ComposeTransform([self.type_flow_lognorm, SigmoidTransform()])
+        self.type_flow_norm = AffineTransform(loc=self.type_flow_norm_loc.item(), scale=self.type_flow_norm_scale.item())
+        self.type_flow_constraint_transforms = ComposeTransform([self.type_flow_norm, SigmoidTransform()])
 
-        self.relapse_flow_lognorm = AffineTransform(loc=self.relapse_flow_lognorm_loc.item(), scale=self.relapse_flow_lognorm_scale.item())
-        self.relapse_flow_constraint_transforms = ComposeTransform([self.relapse_flow_lognorm, SigmoidTransform()])
+        self.relapse_flow_norm = AffineTransform(loc=self.relapse_flow_norm_loc.item(), scale=self.relapse_flow_norm_scale.item())
+        self.relapse_flow_constraint_transforms = ComposeTransform([self.relapse_flow_norm, SigmoidTransform()])
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
@@ -233,22 +233,22 @@ class BaseVISEM(BaseSEM):
             self.brain_volume_flow_lognorm.loc = self.brain_volume_flow_lognorm_loc.item()
         elif name == 'brain_volume_flow_lognorm_scale':
             self.brain_volume_flow_lognorm.scale = self.brain_volume_flow_lognorm_scale.item()
-        elif name == 'duration_flow_lognorm_loc':
-            self.duration_flow_lognorm.loc = self.duration_flow_lognorm_loc.item()
-        elif name == 'duration_flow_lognorm_scale':
-            self.duration_flow_lognorm.scale = self.duration_flow_lognorm_scale.item()
-        elif name == 'type_flow_lognorm_loc':
-            self.type_flow_lognorm.loc = self.type_flow_lognorm_loc.item()
-        elif name == 'type_flow_lognorm_scale':
-            self.type_flow_lognorm.scale = self.type_flow_lognorm_scale.item()
-        elif name == 'relapse_flow_lognorm_loc':
-            self.relapse_flow_lognorm.loc = self.relapse_flow_lognorm_loc.item()
-        elif name == 'relapse_flow_lognorm_scale':
-            self.relapse_flow_lognorm.scale = self.relapse_flow_lognorm_scale.item()
-        elif name == 'edss_flow_lognorm_loc':
-            self.edss_flow_lognorm.loc = self.edss_flow_lognorm_loc.item()
-        elif name == 'edss_flow_lognorm_scale':
-            self.edss_flow_lognorm.scale = self.edss_flow_lognorm_scale.item()
+        elif name == 'duration_flow_norm_loc':
+            self.duration_flow_norm.loc = self.duration_flow_norm_loc.item()
+        elif name == 'duration_flow_norm_scale':
+            self.duration_flow_norm.scale = self.duration_flow_norm_scale.item()
+        elif name == 'type_flow_norm_loc':
+            self.type_flow_norm.loc = self.type_flow_norm_loc.item()
+        elif name == 'type_flow_norm_scale':
+            self.type_flow_norm.scale = self.type_flow_norm_scale.item()
+        elif name == 'relapse_flow_norm_loc':
+            self.relapse_flow_norm.loc = self.relapse_flow_norm_loc.item()
+        elif name == 'relapse_flow_norm_scale':
+            self.relapse_flow_norm.scale = self.relapse_flow_norm_scale.item()
+        elif name == 'edss_flow_norm_loc':
+            self.edss_flow_norm.loc = self.edss_flow_norm_loc.item()
+        elif name == 'edss_flow_norm_scale':
+            self.edss_flow_norm.scale = self.edss_flow_norm_scale.item()
 
     def _get_preprocess_transforms(self):
         return super()._get_preprocess_transforms().inv
@@ -292,6 +292,12 @@ class BaseVISEM(BaseSEM):
     @pyro_method
     def infer_z(self, *args, **kwargs):
         return self.guide(*args, **kwargs)
+
+    @staticmethod
+    def _check_observation(obs):
+        keys = obs.keys()
+        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'edss', 'relapse', 'duration', 'type'}
+        assert required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
     @pyro_method
     def infer(self, **obs):
