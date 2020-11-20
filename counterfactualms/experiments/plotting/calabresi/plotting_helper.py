@@ -1,15 +1,13 @@
-ROOT_PATH = '../../../../'
-CALABRESI_DATA_PATH = ROOT_PATH + 'assets/data/calabresi/'
-BASE_LOG_PATH = ROOT_PATH + 'assets/models/calabresi/SVIExperiment'
-
 from collections import OrderedDict
 from functools import partial
+from glob import glob
 import inspect
 import os
+from pathlib import Path
 import traceback
 import warnings
 
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -29,16 +27,42 @@ diff_cm = 'seismic'
 
 from counterfactualms.datasets.medical.calabresi import CalabresiDataset
 
-data_dir = f'{CALABRESI_DATA_PATH}/examples.csv'
-base_path = f'{CALABRESI_DATA_PATH}/imgs/'
-downsample = 3
-calabresi_test = CalabresiDataset(data_dir, crop_type='center', downsample=downsample)
+calabresi = Path('/iacl/pg20/jacobr/calabresi/')
+version = 3
+checkpoint_path = glob(calabresi/f"runs/SVIExperiment/ConditionalSVI/version_{version}/checkpoints/*.ckpt")[0]
+csv = calabresi/"png/csv/test_png.csv"
+downsample = 2
+crop_size = (224, 224)
+calabresi_test = CalabresiDataset(csv, crop_type='center', downsample=downsample, crop_size=crop_size)
 
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
 
-var_name = {'ventricle_volume': 'v', 'brain_volume': 'b', 'sex': 's', 'age': 'a'}
+variables = (
+    'sex',
+    'age',
+    'brain_volume',
+    'ventricle_volume',
+    'duration',
+    'edss',
+    'type'
+    'relapse',
+)
+var_name = {
+    'ventricle_volume': 'v',
+    'brain_volume': 'b',
+    'sex': 's',
+    'age': 'a',
+    'edss': 'e',
+    'duration': 'd',
+    'type': 't',
+    'relapse': 'r'
+}
 value_fmt = {
+    'edss': lambda s: rf'{float(s):.4g}',
+    'duration': lambda s: rf'{float(s):.4g}\,\mathrm{{y}}',
+    'type': lambda s: '{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
+    'relapse': lambda s: '{}'.format(['\mathrm{N}', '\mathrm{Y}'][int(s)]),
     'ventricle_volume': lambda s: rf'{float(s)/1000:.4g}\,\mathrm{{ml}}',
     'brain_volume': lambda s: rf'{float(s)/1000:.4g}\,\mathrm{{ml}}',
     'age': lambda s: rf'{int(s):d}\,\mathrm{{y}}',
@@ -59,8 +83,14 @@ def prep_data(batch):
     sex = batch['sex'].unsqueeze(0).unsqueeze(0).float()
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
     brain_volume = batch['brain_volume'].unsqueeze(0).unsqueeze(0).float()
+    type = batch['type'].unsqueeze(0).unsqueeze(0).float()
+    relapse = batch['relapse'].unsqueeze(0).unsqueeze(0).float()
+    edss = batch['edss'].unsqueeze(0).unsqueeze(0).float()
+    duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     x = x.float()
-    return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume, 'brain_volume': brain_volume}
+    return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
+            'brain_volume': brain_volume, 'type': type, 'relapse': relapse,
+            'edss': edss, 'duration': duration}
 
 experiments = ['ConditionalVISEM']
 models = {}
@@ -68,9 +98,6 @@ loaded_models = {}
 
 for exp in experiments:
     try:
-        checkpoint_path = f'{BASE_LOG_PATH}/{exp}/version_0/'
-        base_path = os.path.join(checkpoint_path, 'checkpoints')
-        checkpoint_path = os.path.join(base_path, os.listdir(base_path)[0])
         ckpt = torch.load(checkpoint_path, map_location=torch.device('cpu'))
         hparams = ckpt['hparams']
         model_class = MODEL_REGISTRY[hparams['model']]
@@ -126,8 +153,8 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
     
-    suptitle = '$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}$'.format(
-        **{att: value_fmt[att](orig_data[att].item()) for att in ('sex', 'age', 'brain_volume', 'ventricle_volume')}
+    suptitle = '$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}; d={duration}; e={edss}; t={type}; r={relapse}$'.format(
+        **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
     fig.suptitle(suptitle, fontsize=14, y=1.02)
     fig.tight_layout()
@@ -155,9 +182,10 @@ def interactive_plot(model_name):
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
 
-        att_str = '$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$'.format(
-            **{att: value_fmt[att](orig_data[att].item()) for att in ('sex', 'age', 'brain_volume', 'ventricle_volume')}
+        att_str = '$s={sex}\na={age}\nb={brain_volume}\nv={ventricle_volume}\nd={duration}\ne={edss}\nt={type}\nr={relapse}$'.format(
+            **{att: value_fmt[att](orig_data[att].item()) for att in variables}
         )
+
         ax[0].text(0.5, 0.5, att_str, horizontalalignment='center',
                       verticalalignment='center', transform=ax[0].transAxes,
                       fontsize=mpl.rcParams['axes.titlesize'])
@@ -166,7 +194,8 @@ def interactive_plot(model_name):
     from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
     from IPython.display import display
 
-    def plot(image, age, sex, brain_volume, ventricle_volume, do_age, do_sex, do_brain_volume, do_ventricle_volume):
+    def plot(image, age, sex, brain_volume, ventricle_volume, type, duration, relapse, edss,
+             do_age, do_sex, do_brain_volume, do_ventricle_volume, do_type, do_duration, do_relapse, do_edss):
         intervention = {}
         if do_age:
             intervention['age'] = age
@@ -176,17 +205,35 @@ def interactive_plot(model_name):
             intervention['brain_volume'] = brain_volume * 1000.
         if do_ventricle_volume:
             intervention['ventricle_volume'] = ventricle_volume * 1000.
+        if do_type:
+            intervention['type'] = type
+        if do_duration:
+            intervention['duration'] = duration
+        if do_relapse:
+            intervention['relapse'] = relapse
+        if do_edss:
+            intervention['edss'] = edss
 
         plot_intervention(intervention, image)
 
-    w = interactive(plot, image=IntSlider(min=0, max=4, description='Image #'), age=FloatSlider(min=30., max=120., step=1., continuous_update=False, description='Age'),
-                    do_age=Checkbox(description='do(age)'),
-              sex=Dropdown(options=[('female', 0.), ('male', 1.)], description='Sex'),
-                    do_sex=Checkbox(description='do(sex)'),
-              brain_volume=FloatSlider(min=800., max=1600., step=10., continuous_update=False, description='Brain Volume (ml):', style={'description_width': 'initial'}),
-              do_brain_volume=Checkbox(description='do(brain_volume)'),
-              ventricle_volume=FloatSlider(min=11., max=110., step=1., continuous_update=False, description='Ventricle Volume (ml):', style={'description_width': 'initial'}),
-              do_ventricle_volume=Checkbox(description='do(ventricle_volume)'),)
+    w = interactive(plot, image=IntSlider(min=0, max=len(calabresi_test)-1, description='Image #'),
+        age=FloatSlider(min=30., max=120., step=1., continuous_update=False, description='Age'),
+        do_age=Checkbox(description='do(age)'),
+        sex=Dropdown(options=[('female', 0.), ('male', 1.)], description='Sex'),
+        do_sex=Checkbox(description='do(sex)'),
+        brain_volume=FloatSlider(min=800., max=1600., step=10., continuous_update=False, description='Brain Volume (ml):', style={'description_width': 'initial'}),
+        do_brain_volume=Checkbox(description='do(brain_volume)'),
+        ventricle_volume=FloatSlider(min=11., max=110., step=1., continuous_update=False, description='Ventricle Volume (ml):', style={'description_width': 'initial'}),
+        do_ventricle_volume=Checkbox(description='do(ventricle_volume)'),
+        type=Dropdown(options=[('HC', 0.), ('MS', 1.)], description='Type'),
+        do_type=Checkbox(description='do(type)'),
+        duration=FloatSlider(min=0., max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
+        do_duration=Checkbox(description='do(duration)'),
+        relapse=Dropdown(options=[('N', 0.), ('Y', 1.)], description='Relapse'),
+        do_relapse=Checkbox(description='do(relapse)'),
+        edss=FloatSlider(min=0., max=10., step=1., continuous_update=False, description='EDSS:', style={'description_width': 'initial'}),
+        do_edss=Checkbox(description='do(edss)'),
+    )
 
     ui = VBox([w.children[0], VBox([HBox([w.children[i + 1], w.children[i + 5]]) for i in range(4)]), w.children[-1]])
     display(ui)

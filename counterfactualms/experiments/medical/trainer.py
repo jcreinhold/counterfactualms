@@ -1,4 +1,5 @@
 import argparse
+from collections import OrderedDict
 import logging
 import os
 import warnings
@@ -78,8 +79,12 @@ def main():
     model_dict['img_shape'] = args.crop_size
     model = model_class(**model_dict)
     if exp_args.model_path is not None:
-        state_dict = torch.load(exp_args.model_path, map_location=torch.device('cpu'))['state_dict']
-        model.load_state_dict(state_dict, strict=False)
+        ckpt = torch.load(args.model_path, map_location=torch.device('cpu'))
+        new_state_dict = OrderedDict()
+        for key, value in ckpt['state_dict'].items():
+            new_key = key.replace('pyro_model.', '')
+            new_state_dict[new_key] = value
+        model.load_state_dict(new_state_dict, strict=False)
     experiment = exp_class(hparams, model)
     seed_everything(exp_args.seed)
 
