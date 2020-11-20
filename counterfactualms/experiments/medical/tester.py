@@ -10,6 +10,8 @@ import torch
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
+logger = logging.getLogger(__name__)
+
 
 def main():
     exp_parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -26,16 +28,16 @@ def main():
         level = logging.getLevelName('WARNING')
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=level)
 
-    print(f'Running test with {exp_args}')
+    logger.info(f'Running test with {exp_args}')
 
     base_path = os.path.join(exp_args.checkpoint_path, 'checkpoints')
     checkpoint_path = os.path.join(base_path, os.listdir(base_path)[0])
 
-    print(f'using checkpoint {checkpoint_path}')
+    logger.info(f'using checkpoint {checkpoint_path}')
 
     hparams = torch.load(checkpoint_path, map_location=torch.device('cpu'))['hparams']
 
-    print(f'found hparams: {hparams}')
+    logger.info(f'found hparams: {hparams}')
 
     exp_class = EXPERIMENT_REGISTRY[hparams['experiment']]
 
@@ -73,13 +75,13 @@ def main():
                                              or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
     }
 
-    print(f'building model with params: {model_params}')
+    logger.info(f'building model with params: {model_params}')
 
     model = model_class(**model_params)
 
     experiment = exp_class.load_from_checkpoint(checkpoint_path, pyro_model=model)
 
-    print(f'Loaded {experiment.__class__}:\n{experiment}')
+    logger.info(f'Loaded {experiment.__class__}:\n{experiment}')
 
     trainer.test(experiment)
 
