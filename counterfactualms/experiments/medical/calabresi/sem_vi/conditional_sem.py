@@ -36,7 +36,7 @@ class ConditionalVISEM(BaseVISEM):
         ]
 
         # ventricle_volume flow
-        ventricle_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        ventricle_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.ventricle_volume_flow_components = ConditionalAffineTransform(context_nn=ventricle_volume_net, event_dim=0)
         self.ventricle_volume_flow_transforms = [
             self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
@@ -62,6 +62,12 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.brain_volume_flow_components
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
 
+        ventricle_context = torch.cat([age_, brain_volume_], 1)
+        ventricle_volume_base_dist = Normal(self.ventricle_volume_base_loc, self.ventricle_volume_base_scale).to_event(1)
+        ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
+        ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
+        _ = self.ventricle_volume_flow_components
+
         duration_context = torch.cat([sex, age_], 1)
         duration_base_dist = Normal(self.duration_base_loc, self.duration_base_scale).to_event(1)
         duration_dist = ConditionalTransformedDistribution(duration_base_dist, self.duration_flow_transforms).condition(duration_context)  # noqa: E501
@@ -74,13 +80,6 @@ class ConditionalVISEM(BaseVISEM):
         edss_dist = ConditionalTransformedDistribution(edss_base_dist, self.edss_flow_transforms).condition(edss_context)  # noqa: E501
         edss = pyro.sample('edss', edss_dist)
         _ = self.edss_flow_components
-        edss_ = self.edss_flow_constraint_transforms.inv(edss)
-
-        ventricle_context = torch.cat([age_, brain_volume_, edss_], 1)
-        ventricle_volume_base_dist = Normal(self.ventricle_volume_base_loc, self.ventricle_volume_base_scale).to_event(1)
-        ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
-        ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
-        _ = self.ventricle_volume_flow_components
 
         return age, sex, ventricle_volume, brain_volume, duration, edss
 
