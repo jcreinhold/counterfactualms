@@ -21,13 +21,6 @@ class ConditionalVISEM(BaseVISEM):
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
         ]
 
-        # type flow
-        type_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
-        self.type_flow_components = ConditionalAffineTransform(context_nn=type_net, event_dim=0)
-        self.type_flow_transforms = [
-            self.type_flow_components, self.type_flow_constraint_transforms
-        ]
-
         # duration flow
         duration_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.duration_flow_components = ConditionalAffineTransform(context_nn=duration_net, event_dim=0)
@@ -35,15 +28,8 @@ class ConditionalVISEM(BaseVISEM):
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        # relapse flow
-        relapse_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
-        self.relapse_flow_components = ConditionalAffineTransform(context_nn=relapse_net, event_dim=0)
-        self.relapse_flow_transforms = [
-            self.relapse_flow_components, self.relapse_flow_constraint_transforms
-        ]
-
         # edss flow
-        edss_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        edss_net = DenseNN(1, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.edss_flow_components = ConditionalAffineTransform(context_nn=edss_net, event_dim=0)
         self.edss_flow_transforms = [
             self.edss_flow_components, self.edss_flow_constraint_transforms
@@ -76,45 +62,32 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.brain_volume_flow_components
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
 
-        type_context = torch.cat([sex, age_], 1)
-        type_base_dist = Normal(self.type_base_loc, self.type_base_scale).to_event(1)
-        type_dist = ConditionalTransformedDistribution(type_base_dist, self.type_flow_transforms).condition(type_context)  # noqa: E501
-        type = pyro.sample('type', type_dist)
-        _ = self.type_flow_components
-        type_ = self.type_flow_constraint_transforms.inv(type)
-
-        ventricle_context = torch.cat([age_, brain_volume_, type_], 1)
-        ventricle_volume_base_dist = Normal(self.ventricle_volume_base_loc, self.ventricle_volume_base_scale).to_event(1)
-        ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
-        ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
-        _ = self.ventricle_volume_flow_components
-
-        duration_context = torch.cat([age_, type_], 1)
+        duration_context = torch.cat([sex, age_], 1)
         duration_base_dist = Normal(self.duration_base_loc, self.duration_base_scale).to_event(1)
         duration_dist = ConditionalTransformedDistribution(duration_base_dist, self.duration_flow_transforms).condition(duration_context)  # noqa: E501
         duration = pyro.sample('duration', duration_dist)
         _ = self.duration_flow_components
         duration_ = self.duration_flow_constraint_transforms.inv(duration)
 
-        relapse_context = torch.cat([type_, duration_], 1)
-        relapse_base_dist = Normal(self.relapse_base_loc, self.relapse_base_scale).to_event(1)
-        relapse_dist = ConditionalTransformedDistribution(relapse_base_dist, self.relapse_flow_transforms).condition(relapse_context)  # noqa: E501
-        relapse = pyro.sample('relapse', relapse_dist)
-        _ = self.relapse_flow_components
-        relapse_ = self.relapse_flow_constraint_transforms.inv(relapse)
-
-        edss_context = torch.cat([type_, duration_, relapse_], 1)
+        edss_context = torch.cat([duration_], 1)
         edss_base_dist = Normal(self.edss_base_loc, self.edss_base_scale).to_event(1)
         edss_dist = ConditionalTransformedDistribution(edss_base_dist, self.edss_flow_transforms).condition(edss_context)  # noqa: E501
         edss = pyro.sample('edss', edss_dist)
         _ = self.edss_flow_components
+        edss_ = self.edss_flow_constraint_transforms.inv(edss)
 
-        return age, sex, ventricle_volume, brain_volume, type, duration, relapse, edss
+        ventricle_context = torch.cat([age_, brain_volume_, edss_], 1)
+        ventricle_volume_base_dist = Normal(self.ventricle_volume_base_loc, self.ventricle_volume_base_scale).to_event(1)
+        ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
+        ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
+        _ = self.ventricle_volume_flow_components
+
+        return age, sex, ventricle_volume, brain_volume, duration, edss
 
     # no arguments because model is called with condition decorator
     @pyro_method
     def model(self):
-        age, sex, ventricle_volume, brain_volume, type, duration, relapse, edss = self.pgm_model()
+        age, sex, ventricle_volume, brain_volume, duration, edss = self.pgm_model()
 
         ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
@@ -128,10 +101,10 @@ class ConditionalVISEM(BaseVISEM):
 
         x = pyro.sample('x', x_dist)
 
-        return x, z, age, sex, ventricle_volume, brain_volume, type, duration, relapse, edss
+        return x, z, age, sex, ventricle_volume, brain_volume, duration, edss
 
     @pyro_method
-    def guide(self, x, age, sex, ventricle_volume, brain_volume, type, duration, relapse, edss):
+    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, edss):
         with pyro.plate('observations', x.shape[0]):
             hidden = self.encoder(x)
 

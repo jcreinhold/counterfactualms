@@ -179,29 +179,19 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.brain_volume_flow_lognorm_scale = (brain_volume.log().std().to(self.torch_device).float())
 
         duration = torch.from_numpy(self.calabresi_train.csv['duration'].to_numpy())
-        self.pyro_model.duration_flow_norm_loc = (duration.mean().to(self.torch_device).float())
-        self.pyro_model.duration_flow_norm_scale = (duration.std().to(self.torch_device).float())
+        self.pyro_model.duration_flow_lognorm_loc = (duration.log().mean().to(self.torch_device).float())
+        self.pyro_model.duration_flow_lognorm_scale = (duration.log().std().to(self.torch_device).float())
 
         edss = torch.from_numpy(self.calabresi_train.csv['edss'].to_numpy())
-        self.pyro_model.edss_flow_norm_loc = (edss.mean().to(self.torch_device).float())
-        self.pyro_model.edss_flow_norm_scale = (edss.std().to(self.torch_device).float())
-
-        relapse = torch.from_numpy(self.calabresi_train.csv['relapse'].to_numpy())
-        self.pyro_model.relapse_flow_norm_loc = (relapse.mean().to(self.torch_device).float())
-        self.pyro_model.relapse_flow_norm_scale = (relapse.std().to(self.torch_device).float())
-
-        type = torch.from_numpy(self.calabresi_train.csv['type'].to_numpy())
-        self.pyro_model.type_flow_norm_loc = (type.mean().to(self.torch_device).float())
-        self.pyro_model.type_flow_norm_scale = (type.std().to(self.torch_device).float())
+        self.pyro_model.edss_flow_lognorm_loc = (edss.log().mean().to(self.torch_device).float())
+        self.pyro_model.edss_flow_lognorm_scale = (edss.log().std().to(self.torch_device).float())
 
         if self.hparams.validate:
             logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')
             logger.info(f'set brain_volume_flow_lognorm {self.pyro_model.brain_volume_flow_lognorm.loc} +/- {self.pyro_model.brain_volume_flow_lognorm.scale}')
             logger.info(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
-            logger.info(f'set duration_flow_norm {self.pyro_model.duration_flow_norm.loc} +/- {self.pyro_model.duration_flow_norm.scale}')  # noqa: E501
-            logger.info(f'set edss_flow_norm {self.pyro_model.edss_flow_norm.loc} +/- {self.pyro_model.edss_flow_norm.scale}')  # noqa: E501
-            logger.info(f'set relapse_flow_norm {self.pyro_model.relapse_flow_norm.loc} +/- {self.pyro_model.relapse_flow_norm.scale}')  # noqa: E501
-            logger.info(f'set type_flow_norm {self.pyro_model.type_flow_norm.loc} +/- {self.pyro_model.type_flow_norm.scale}')  # noqa: E501
+            logger.info(f'set duration_flow_lognorm {self.pyro_model.duration_flow_lognorm.loc} +/- {self.pyro_model.duration_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set edss_flow_lognorm {self.pyro_model.edss_flow_lognorm.loc} +/- {self.pyro_model.edss_flow_lognorm.scale}')  # noqa: E501
 
     def configure_optimizers(self):
         pass
@@ -254,8 +244,6 @@ class BaseCovariateExperiment(pl.LightningModule):
             'sex': sample_trace.nodes['sex']['value'].cpu(),
             'edss': sample_trace.nodes['edss']['value'].cpu(),
             'duration': sample_trace.nodes['duration']['value'].cpu(),
-            'type': sample_trace.nodes['type']['value'].cpu(),
-            'relapse': sample_trace.nodes['relapse']['value'].cpu(),
         }
 
         cond_data = {
@@ -273,8 +261,6 @@ class BaseCovariateExperiment(pl.LightningModule):
             'sex': sample_trace.nodes['sex']['value'].cpu(),
             'edss': sample_trace.nodes['edss']['value'].cpu(),
             'duration': sample_trace.nodes['duration']['value'].cpu(),
-            'type': sample_trace.nodes['type']['value'].cpu(),
-            'relapse': sample_trace.nodes['relapse']['value'].cpu(),
         }
 
         logger.info(f'Got samples: {tuple(samples.keys())}')
@@ -340,10 +326,9 @@ class BaseCovariateExperiment(pl.LightningModule):
             'do(age=120)': {'age': torch.ones_like(batch['age']) * 120},
             'do(sex=0)': {'sex': torch.zeros_like(batch['sex'])},
             'do(sex=1)': {'sex': torch.ones_like(batch['sex'])},
-            'do(type=0)': {'type': torch.zeros_like(batch['type'])},
-            'do(type=1)': {'type': torch.ones_like(batch['type'])},
-            'do(edss=-1)': {'type': torch.ones_like(batch['type'] * -1.)},
-            'do(edss=1)': {'type': torch.ones_like(batch['type'])},
+            'do(duration=0)': {'duration': torch.zeros_like(batch['type'])},
+            'do(duration=12)': {'duration': torch.ones_like(batch['type']) * 12.},
+            'do(edss=0)': {'type': torch.ones_like(batch['type'])},
             'do(edss=6)': {'type': torch.ones_like(batch['type']) * 6.},
             'do(brain_volume=800000, ventricle_volume=224)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 800000,
                                                               'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 110000},
@@ -407,11 +392,11 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         self.logger.experiment.add_figure(tag, fig, self.current_epoch)
 
-    def build_reconstruction(self, x, age, sex, ventricle_volume, brain_volume, type, duration, relapse, edss,
+    def build_reconstruction(self, x, age, sex, ventricle_volume, brain_volume, duration, edss,
                              tag='reconstruction'):
         obs = {'x': x, 'sex': sex, 'age': age,
                'ventricle_volume': ventricle_volume, 'brain_volume': brain_volume,
-               'type': type, 'duration': duration, 'relapse': relapse, 'edss': edss}
+               'duration': duration, 'edss': edss}
 
         recon = self.pyro_model.reconstruct(**obs, num_particles=self.hparams.num_sample_particles)
         self.log_img_grid(tag, torch.cat([x, recon], 0))
@@ -420,7 +405,7 @@ class BaseCovariateExperiment(pl.LightningModule):
     @staticmethod
     def _check_observation(obs):
         keys = obs.keys()
-        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'edss', 'relapse', 'duration', 'type'}
+        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'edss', 'duration'}
         assert required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
     def build_counterfactual(self, tag, obs, conditions, absolute=None):
@@ -433,12 +418,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_kdes = {'orig': {'brain_volume': obs['brain_volume']}}
         elif absolute == 'edss':
             sampled_kdes = {'orig': {'edss': obs['edss']}}
-        elif absolute == 'relapse':
-            sampled_kdes = {'orig': {'relapse': obs['relapse']}}
         elif absolute == 'duration':
             sampled_kdes = {'orig': {'duration': obs['duration']}}
-        elif absolute == 'type':
-            sampled_kdes = {'orig': {'type': obs['type']}}
         else:
             sampled_kdes = {'orig': {'brain_volume': obs['brain_volume'], 'ventricle_volume': obs['ventricle_volume']}}
 
@@ -450,8 +431,6 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_ventricle_volume = counterfactual['ventricle_volume']
             sampled_edss = counterfactual['edss']
             sampled_duration = counterfactual['duration']
-            sampled_type = counterfactual['type']
-            sampled_relapse = counterfactual['relapse']
 
             imgs.append(counter)
             if absolute == 'brain_volume':
@@ -462,10 +441,6 @@ class BaseCovariateExperiment(pl.LightningModule):
                 sampled_kdes[name] = {'edss': sampled_edss}
             elif absolute == 'duration':
                 sampled_kdes[name] = {'duration': sampled_duration}
-            elif absolute == 'type':
-                sampled_kdes[name] = {'type': sampled_type}
-            elif absolute == 'relapse':
-                sampled_kdes[name] = {'relapse': sampled_relapse}
             else:
                 sampled_kdes[name] = {'brain_volume': sampled_brain_volume, 'ventricle_volume': sampled_ventricle_volume}
 
@@ -536,18 +511,6 @@ class BaseCovariateExperiment(pl.LightningModule):
                 '110000': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 110000}
             }
             self.build_counterfactual('do(ventricle_volume=x)', obs=obs_batch, conditions=conditions, absolute='ventricle_volume')
-
-            conditions = {
-                '0': {'type': torch.zeros_like(obs_batch['type'])},
-                '1': {'type': torch.ones_like(obs_batch['type'])},
-            }
-            self.build_counterfactual('do(type=x)', obs=obs_batch, conditions=conditions, absolute='type')
-
-            conditions = {
-                '0': {'relapse': torch.zeros_like(obs_batch['relapse'])},
-                '1': {'relapse': torch.ones_like(obs_batch['relapse'])},
-            }
-            self.build_counterfactual('do(relapse=x)', obs=obs_batch, conditions=conditions, absolute='relapse')
 
             conditions = {
                 '0': {'edss': torch.zeros_like(obs_batch['edss']) + 0.},

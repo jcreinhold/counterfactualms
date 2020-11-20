@@ -7,15 +7,15 @@ import torchvision as tv
 
 
 class CalabresiDataset(Dataset):
-    def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), downsample:int=None):
+    def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), downsample:int=None, eps:float=1e-5):
         super().__init__()
         self.csv_path = csv_path
         csv = pd.read_csv(csv_path)
         csv.drop(['fss', 'msss', 'treatment_propagated', 'treatment'], axis=1, inplace=True)
         csv.rename(columns={'relapse_last30days': 'relapse'}, inplace=True)
         csv['relapse'] = csv['relapse'].map({np.nan: -1., 'N': 0., 'Y': 1.})
-        csv['duration'] = csv['duration'].fillna(-1.)
-        csv['edss'] = csv['edss'].fillna(-1.)
+        csv['duration'] = csv['duration'].fillna(eps)
+        csv['edss'] = csv['edss'].fillna(eps)
         csv['sex'] = csv['sex'].map({'M': 0., 'F': 1.})
         csv['type'] = csv['type'].map({'HC': 0., 'RRMS': 1., 'SPMS': 1., 'PPMS': 1.})
         csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32)
