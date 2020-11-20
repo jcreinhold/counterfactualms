@@ -1,6 +1,5 @@
 from collections import OrderedDict
 from functools import partial
-from glob import glob
 import inspect
 import os
 import traceback
@@ -10,7 +9,6 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from matplotlib import cm
 import numpy as np
 import pyro
 import torch
@@ -20,16 +18,12 @@ torch.autograd.set_grad_enabled(False)
 
 mpl.rcParams['figure.dpi'] = 300
 
-cmaps = [cm.Reds, cm.Blues, cm.Greens]
 img_cm = 'Greys_r'
 diff_cm = 'seismic'
 
 from counterfactualms.datasets.medical.calabresi import CalabresiDataset
 
-calabresi = '/iacl/pg20/jacobr/calabresi/'
-version = 4
-checkpoint_path = glob(calabresi+f"run/SVIExperiment/ConditionalVISEM/version_{version}/checkpoints/*.ckpt")[0]
-csv = calabresi+"png/csv/test_png.csv"
+csv = "/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv"
 downsample = 2
 crop_size = (224, 224)
 calabresi_test = CalabresiDataset(csv, crop_type='center', downsample=downsample, crop_size=crop_size)
@@ -37,6 +31,10 @@ n_rot90 = 3
 
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
+
+experiments = ['ConditionalVISEM']
+models = {}
+loaded_models = {}
 
 variables = (
     'sex',
@@ -63,6 +61,45 @@ value_fmt = {
     'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)])
 }
 
+def setup(model_paths):
+    """ run this first with paths to models corresponding to experiments """
+    if isinstance(model_paths, str):
+        model_paths = [model_paths]
+    if len(model_paths) != len(experiments):
+        raise ValueError('Provided paths do not match number of experiments')
+    for exp, path in zip(experiments, model_paths):
+        try:
+            ckpt = torch.load(path, map_location=torch.device('cpu'))
+            hparams = ckpt['hyper_parameters']
+            model_class = MODEL_REGISTRY[hparams['model']]
+            model_params = {
+                k: v for k, v in hparams.items() if (k in inspect.signature(model_class.__init__).parameters
+                                                     or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
+                                                     or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
+            }
+            model_params['img_shape'] = hparams['crop_size']
+            new_state_dict = OrderedDict()
+            for key, value in ckpt['state_dict'].items():
+                new_key = key.replace('pyro_model.', '')
+                new_state_dict[new_key] = value
+            loaded_model = model_class(**model_params)
+            loaded_model.load_state_dict(new_state_dict)
+            for p in loaded_model._buffers.keys():
+                if 'norm' in p:
+                    setattr(loaded_model, p, getattr(loaded_model, p))
+            loaded_model.eval()
+            global loaded_models
+            loaded_models[exp] = loaded_model
+            def sample_pgm(num_samples, model):
+                with pyro.plate('observations', num_samples):
+                    return model.pgm_model()
+            global models
+            models[exp] = partial(sample_pgm, model=loaded_model)
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+
+
 def fmt_intervention(intervention):
     if isinstance(intervention, str):
         var, value = intervention[3:-1].split('=')
@@ -70,6 +107,7 @@ def fmt_intervention(intervention):
     else:
         all_interventions = ',\n'.join([f'${var_name[k]}={value_fmt[k](v)}$' for k, v in intervention.items()])
         return f"do({all_interventions})"
+
 
 def prep_data(batch):
     x = batch['image'].unsqueeze(0) * 255.
@@ -83,39 +121,6 @@ def prep_data(batch):
     return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
             'brain_volume': brain_volume, 'edss': edss, 'duration': duration}
 
-experiments = ['ConditionalVISEM']
-models = {}
-loaded_models = {}
-
-for exp in experiments:
-    try:
-        ckpt = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-        hparams = ckpt['hyper_parameters']
-        model_class = MODEL_REGISTRY[hparams['model']]
-        model_params = {
-            k: v for k, v in hparams.items() if (k in inspect.signature(model_class.__init__).parameters
-                                                 or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
-                                                 or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
-        }
-        model_params['img_shape'] = hparams['crop_size']
-        new_state_dict = OrderedDict()
-        for key, value in ckpt['state_dict'].items():
-            new_key = key.replace('pyro_model.', '')
-            new_state_dict[new_key] = value
-        loaded_model = model_class(**model_params)
-        loaded_model.load_state_dict(new_state_dict)
-        for p in loaded_model._buffers.keys():
-            if 'norm' in p:
-                setattr(loaded_model, p, getattr(loaded_model, p))
-        loaded_model.eval()
-        loaded_models[exp] = loaded_model
-        def sample_pgm(num_samples, model):
-            with pyro.plate('observations', num_samples):
-                return model.pgm_model()
-        models[exp] = partial(sample_pgm, model=loaded_model)
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
 
 def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32):
     fig, ax = plt.subplots(3, len(interventions), figsize=(1.6 * len(interventions), 5), gridspec_kw=dict(wspace=0, hspace=0))
@@ -136,10 +141,10 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
         diff = (x_test - x).squeeze()
         if not normalise_all:
             lim = diff.abs().max()
-        ax[0, i].imshow(np.rot90(x_test.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
+        ax[0, i].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
         ax[0, i].set_title(fmt_intervention(intervention))
-        ax[1, i].imshow(np.rot90(x.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
-        ax[2, i].imshow(np.rot90(diff, n_rot90), 'seismic', clim=[-lim, lim])
+        ax[1, i].imshow(np.rot90(x.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
+        ax[2, i].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
         for axi in ax[:, i]:
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
@@ -151,6 +156,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
     fig.suptitle(suptitle, fontsize=14, y=1.02)
     fig.tight_layout()
     plt.show()
+
 
 def interactive_plot(model_name):
     def plot_intervention(intervention, idx, num_samples=32):
@@ -164,11 +170,11 @@ def interactive_plot(model_name):
         diff = (x_test - x).squeeze()
         lim = diff.abs().max()
         ax[1].set_title('Original')
-        ax[1].imshow(np.rot90(x_test.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
+        ax[1].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
         ax[2].set_title(fmt_intervention(intervention))
-        ax[2].imshow(np.rot90(x.squeeze(), n_rot90), 'Greys_r', vmin=0, vmax=255)
+        ax[2].imshow(np.rot90(x.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
         ax[3].set_title('Difference')
-        ax[3].imshow(np.rot90(diff, n_rot90), 'seismic', clim=[-lim, lim])
+        ax[3].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
         for axi in ax:
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
