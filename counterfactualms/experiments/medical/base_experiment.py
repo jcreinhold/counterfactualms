@@ -384,10 +384,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             try:
                 if len(covariates) == 1:
                     (x_n, x), = tuple(covariates.items())
-                    sns.kdeplot(x=np_val(x), ax=ax[i], shade=True, thresh=0.05)
+                    sns.kdeplot(x=np_val(x), ax=ax[i], fill=True, thresh=0.01)
                 elif len(covariates) == 2:
                     (x_n, x), (y_n, y) = tuple(covariates.items())
-                    sns.kdeplot(x=np_val(x), y=np_val(y), ax=ax[i], shade=True, thresh=0.05)
+                    sns.kdeplot(x=np_val(x), y=np_val(y), ax=ax[i], fill=True, thresh=0.01)
                     ax[i].set_ylabel(y_n)
                 else:
                     raise ValueError(f'got too many values: {len(covariates)}')
@@ -540,13 +540,13 @@ class BaseCovariateExperiment(pl.LightningModule):
                 '0': {'type': torch.zeros_like(obs_batch['type'])},
                 '1': {'type': torch.ones_like(obs_batch['type'])},
             }
-            self.build_counterfactual('do(type=x)', obs=obs_batch, conditions=conditions)
+            self.build_counterfactual('do(type=x)', obs=obs_batch, conditions=conditions, absolute='type')
 
             conditions = {
                 '0': {'relapse': torch.zeros_like(obs_batch['relapse'])},
                 '1': {'relapse': torch.ones_like(obs_batch['relapse'])},
             }
-            self.build_counterfactual('do(relapse=x)', obs=obs_batch, conditions=conditions)
+            self.build_counterfactual('do(relapse=x)', obs=obs_batch, conditions=conditions, absolute='relapse')
 
             conditions = {
                 '0': {'edss': torch.zeros_like(obs_batch['edss']) + 0.},
