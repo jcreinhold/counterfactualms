@@ -241,7 +241,9 @@ def interactive_plot(model_name):
         slice_number=FloatSlider(min=100., max=200., step=1., continuous_update=False, description='Slice #:', style={'description_width': 'initial'}),
         do_slice_number=Checkbox(description='do(slice_number)'),
         )
-    ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+1]]) for i in range(1,2*len(variables),2)]), w.children[-1]])
+
+    n = len(variables)
+    ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+n]]) for i in range(1,n+1)]), w.children[-1]])
     display(ui)
     w.update()
 

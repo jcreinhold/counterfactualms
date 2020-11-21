@@ -49,7 +49,7 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.sex_logits
         sex = pyro.sample('sex', sex_dist)
 
-        slice_number_dist = Uniform(low=self.slice_number_low, high=self.slice_number_high)
+        slice_number_dist = Uniform(low=self.slice_number_low, high=self.slice_number_high).to_event(1)
         _ = self.slice_number_low
         _ = self.slice_number_high
         slice_number = pyro.sample('slice_number', slice_number_dist)
