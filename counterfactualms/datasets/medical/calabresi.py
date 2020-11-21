@@ -31,6 +31,7 @@ class CalabresiDataset(Dataset):
         csv['type'] = csv['type'].map({'HC': 0., 'RRMS': 1., 'SPMS': 1., 'PPMS': 1.})
         csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32)
         csv['brain_volume'] = csv['brain_volume'].astype(np.float32)
+        csv['slice_number'] = csv['slice_number'].astype(np.float32)
         if csv.isnull().values.any():
             raise ValueError(
                 'There is either an empty space, nan, or otherwise '
@@ -80,4 +81,5 @@ class CalabresiDataset(Dataset):
         item['brain_volume'] = torch.as_tensor(item['brain_volume'], dtype=torch.float32)
         item['ventricle_volume'] = torch.as_tensor(item['ventricle_volume'], dtype=torch.float32)
         item['score'] = torch.as_tensor(item['score'], dtype=torch.float32)
+        item['slice_number'] = torch.as_tensor(item['slice_number'], dtype=torch.float32)
         return item

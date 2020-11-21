@@ -27,7 +27,7 @@ csv = "/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv"
 downsample = 2
 crop_size = (224, 224)
 calabresi_test = CalabresiDataset(csv, crop_type='center', downsample=downsample, crop_size=crop_size)
-n_rot90 = 3
+n_rot90 = 0
 
 from counterfactualms.experiments.medical import calabresi  # noqa: F401
 from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
@@ -43,6 +43,7 @@ variables = (
     'ventricle_volume',
     'duration',
     'score',
+    'slice_number',
 )
 var_name = {
     'ventricle_volume': 'v',
@@ -51,6 +52,7 @@ var_name = {
     'age': 'a',
     'score': 'e',
     'duration': 'd',
+    'slice_number': 'n',
 }
 value_fmt = {
     'score': lambda s: rf'{float(s):.3g}',
@@ -59,7 +61,8 @@ value_fmt = {
     'brain_volume': lambda s: rf'{float(s)/1000:.3g}\,\mathrm{{ml}}',
     'age': lambda s: rf'{int(s):d}\,\mathrm{{y}}',
     'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)]),
-    'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)])
+    'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
+    'slice_number': lambda s: rf'{int(s):d}',
 }
 
 def setup(model_paths):
@@ -119,9 +122,11 @@ def prep_data(batch):
     score = batch['score'].unsqueeze(0).unsqueeze(0).float()
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     type = batch['type'].unsqueeze(0).unsqueeze(0).float()
+    slice_number = batch['slice_number'].unsqueeze(0).unsqueeze(0).float()
     x = x.float()
     return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
-            'brain_volume': brain_volume, 'score': score, 'duration': duration, 'type': type}
+            'brain_volume': brain_volume, 'score': score, 'duration': duration, 'type': type,
+            'slice_number': slice_number}
 
 
 def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32):
@@ -155,7 +160,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
             axi.yaxis.set_major_locator(plt.NullLocator())
 
     orig_data['type'] = ms_type
-    suptitle = r'$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}; d={duration}; e={score}$'.format(
+    suptitle = r'$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}; d={duration}; e={score}; n={slice_number}$'.format(
         **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
     fig.suptitle(suptitle, fontsize=14, y=1.02)
@@ -188,7 +193,7 @@ def interactive_plot(model_name):
             axi.yaxis.set_major_locator(plt.NullLocator())
 
         orig_data['type'] = ms_type
-        att_str = '$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$d={duration}$\n$e={score}$\n$t={type}$'.format(
+        att_str = '$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$d={duration}$\n$e={score}$\n$t={type}$\n$n={slice_number}$'.format(
             **{att: value_fmt[att](orig_data[att].item()) for att in variables + ('type',)}
         )
 
@@ -200,8 +205,8 @@ def interactive_plot(model_name):
     from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
     from IPython.display import display
 
-    def plot(image, age, sex, brain_volume, ventricle_volume, duration, score,
-             do_age, do_sex, do_brain_volume, do_ventricle_volume, do_duration, do_score):
+    def plot(image, age, sex, brain_volume, ventricle_volume, duration, score, slice_number,
+             do_age, do_sex, do_brain_volume, do_ventricle_volume, do_duration, do_score, do_slice_number):
         intervention = {}
         if do_age:
             intervention['age'] = age
@@ -215,6 +220,8 @@ def interactive_plot(model_name):
             intervention['duration'] = duration
         if do_score:
             intervention['score'] = score
+        if do_slice_number:
+            intervention['slice_number'] = slice_number
 
         plot_intervention(intervention, image)
 
@@ -231,7 +238,9 @@ def interactive_plot(model_name):
         do_duration=Checkbox(description='do(duration)'),
         score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
         do_score=Checkbox(description='do(score)'),
-    )
+        slice_number=FloatSlider(min=100., max=200., step=1., continuous_update=False, description='Slice #:', style={'description_width': 'initial'}),
+        do_slice_number=Checkbox(description='do(slice_number)'),
+        )
     ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+1]]) for i in range(1,2*len(variables),2)]), w.children[-1]])
     display(ui)
     w.update()

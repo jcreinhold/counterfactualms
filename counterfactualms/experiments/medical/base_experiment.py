@@ -244,6 +244,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             'sex': sample_trace.nodes['sex']['value'].cpu(),
             'score': sample_trace.nodes['score']['value'].cpu(),
             'duration': sample_trace.nodes['duration']['value'].cpu(),
+            'slice_number': sample_trace.nodes['slice_number']['value'].cpu(),
         }
 
         cond_data = {
@@ -261,6 +262,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             'sex': sample_trace.nodes['sex']['value'].cpu(),
             'score': sample_trace.nodes['score']['value'].cpu(),
             'duration': sample_trace.nodes['duration']['value'].cpu(),
+            'slice_number': sample_trace.nodes['slice_number']['value'].cpu(),
         }
 
         logger.info(f'Got samples: {tuple(samples.keys())}')
@@ -330,6 +332,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             'do(duration=12)': {'duration': torch.ones_like(batch['type']) * 12.},
             'do(score=0)': {'type': torch.ones_like(batch['type']) + 1e-5},
             'do(score=6)': {'type': torch.ones_like(batch['type']) * 6.},
+            'do(slice_number=115)': {'type': torch.ones_like(batch['type']) * 115.},
+            'do(slice_number=125)': {'type': torch.ones_like(batch['type']) * 125.},
             'do(brain_volume=800000, ventricle_volume=224)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 800000,
                                                               'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 110000},
             'do(brain_volume=1600000, ventricle_volume=10000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 1600000,
@@ -392,11 +396,11 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         self.logger.experiment.add_figure(tag, fig, self.current_epoch)
 
-    def build_reconstruction(self, x, age, sex, ventricle_volume, brain_volume, duration, score,
+    def build_reconstruction(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number,
                              tag='reconstruction'):
         obs = {'x': x, 'sex': sex, 'age': age,
                'ventricle_volume': ventricle_volume, 'brain_volume': brain_volume,
-               'duration': duration, 'score': score}
+               'duration': duration, 'score': score, 'slice_number': slice_number}
 
         recon = self.pyro_model.reconstruct(**obs, num_particles=self.hparams.num_sample_particles)
         self.log_img_grid(tag, torch.cat([x, recon], 0))
@@ -405,7 +409,7 @@ class BaseCovariateExperiment(pl.LightningModule):
     @staticmethod
     def _check_observation(obs):
         keys = obs.keys()
-        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'score', 'duration'}
+        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'score', 'duration', 'slice_number'}
         assert required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
     def build_counterfactual(self, tag, obs, conditions, absolute=None):
@@ -420,6 +424,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_kdes = {'orig': {'score': obs['score']}}
         elif absolute == 'duration':
             sampled_kdes = {'orig': {'duration': obs['duration']}}
+        elif absolute == 'slice_number':
+            sampled_kdes = {'orig': {'slice_number': obs['slice_number']}}
         else:
             sampled_kdes = {'orig': {'brain_volume': obs['brain_volume'], 'ventricle_volume': obs['ventricle_volume']}}
 
@@ -431,6 +437,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_ventricle_volume = counterfactual['ventricle_volume']
             sampled_score = counterfactual['score']
             sampled_duration = counterfactual['duration']
+            sampled_slice_number = counterfactual['slice_number']
 
             imgs.append(counter)
             if absolute == 'brain_volume':
@@ -441,6 +448,8 @@ class BaseCovariateExperiment(pl.LightningModule):
                 sampled_kdes[name] = {'score': sampled_score}
             elif absolute == 'duration':
                 sampled_kdes[name] = {'duration': sampled_duration}
+            elif absolute == 'slice_number':
+                sampled_kdes[name] = {'slice_number': sampled_slice_number}
             else:
                 sampled_kdes[name] = {'brain_volume': sampled_brain_volume, 'ventricle_volume': sampled_ventricle_volume}
 
@@ -529,6 +538,12 @@ class BaseCovariateExperiment(pl.LightningModule):
                 '12': {'duration': torch.zeros_like(obs_batch['duration']) + 12.}
             }
             self.build_counterfactual('do(duration=x)', obs=obs_batch, conditions=conditions, absolute='duration')
+
+            conditions = {
+                '115': {'slice_number': torch.zeros_like(obs_batch['slice_number']) + 115},
+                '125': {'slice_number': torch.zeros_like(obs_batch['slice_number']) + 125.}
+            }
+            self.build_counterfactual('do(slice_number=x)', obs=obs_batch, conditions=conditions, absolute='slice_number')
 
     @classmethod
     def add_arguments(cls, parser):

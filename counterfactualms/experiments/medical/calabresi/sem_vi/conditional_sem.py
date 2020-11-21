@@ -1,6 +1,6 @@
 import pyro
 from pyro.nn import pyro_method, DenseNN
-from pyro.distributions import Normal, Bernoulli, TransformedDistribution # noqa: F401
+from pyro.distributions import Normal, Bernoulli, Uniform, TransformedDistribution # noqa: F401
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 import torch
 
@@ -9,7 +9,8 @@ from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment i
 
 
 class ConditionalVISEM(BaseVISEM):
-    context_dim = 4  # number of context dimensions for decoder (4 b/c brain vol, ventricle vol, score, duration)
+    # number of context dimensions for decoder (5 b/c brain vol, ventricle vol, score, duration, slice number)
+    context_dim = 5
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -48,6 +49,11 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.sex_logits
         sex = pyro.sample('sex', sex_dist)
 
+        slice_number_dist = Uniform(low=self.slice_number_low, high=self.slice_number_high)
+        _ = self.slice_number_low
+        _ = self.slice_number_high
+        slice_number = pyro.sample('slice_number', slice_number_dist)
+
         age_base_dist = Normal(self.age_base_loc, self.age_base_scale).to_event(1)
         age_dist = TransformedDistribution(age_base_dist, self.age_flow_transforms)
         age = pyro.sample('age', age_dist)
@@ -81,12 +87,12 @@ class ConditionalVISEM(BaseVISEM):
         score = pyro.sample('score', score_dist)
         _ = self.score_flow_components
 
-        return age, sex, ventricle_volume, brain_volume, duration, score
+        return age, sex, ventricle_volume, brain_volume, duration, score, slice_number
 
     # no arguments because model is called with condition decorator
     @pyro_method
     def model(self):
-        age, sex, ventricle_volume, brain_volume, duration, score = self.pgm_model()
+        age, sex, ventricle_volume, brain_volume, duration, score, slice_number = self.pgm_model()
 
         ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
@@ -95,16 +101,16 @@ class ConditionalVISEM(BaseVISEM):
 
         z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
 
-        latent = torch.cat([z, ventricle_volume_, brain_volume_, score_, duration_], 1)
+        latent = torch.cat([z, ventricle_volume_, brain_volume_, score_, duration_, slice_number], 1)
 
         x_dist = self._get_transformed_x_dist(latent)
 
         x = pyro.sample('x', x_dist)
 
-        return x, z, age, sex, ventricle_volume, brain_volume, duration, score
+        return x, z, age, sex, ventricle_volume, brain_volume, duration, score, slice_number
 
     @pyro_method
-    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score):
+    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
         with pyro.plate('observations', x.shape[0]):
             hidden = self.encoder(x)
 
@@ -113,7 +119,7 @@ class ConditionalVISEM(BaseVISEM):
             duration_ = self.duration_flow_constraint_transforms.inv(duration)
             score_ = self.score_flow_constraint_transforms.inv(score)
 
-            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, score_, duration_], 1)
+            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, score_, duration_, slice_number], 1)
 
             latent_dist = self.latent_encoder.predict(hidden)
 

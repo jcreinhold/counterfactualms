@@ -149,6 +149,8 @@ class BaseVISEM(BaseSEM):
         self.register_buffer('age_base_scale', torch.ones([1, ], requires_grad=False))
 
         self.sex_logits = torch.nn.Parameter(torch.zeros([1, ]))
+        self.slice_number_low = torch.nn.Parameter(torch.zeros([1, ]))
+        self.slice_number_high = torch.nn.Parameter(torch.zeros([1, ]) + 241.)
 
         self.register_buffer('ventricle_volume_base_loc', torch.zeros([1, ], requires_grad=False))
         self.register_buffer('ventricle_volume_base_scale', torch.ones([1, ], requires_grad=False))
@@ -247,22 +249,23 @@ class BaseVISEM(BaseSEM):
         return TransformedDistribution(x_base_dist, ComposeTransform([x_reparam_transform, preprocess_transform]))
 
     @pyro_method
-    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score):
+    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
         raise NotImplementedError()
 
     @pyro_method
-    def svi_guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score):
-        self.guide(x, age, sex, ventricle_volume, brain_volume, duration, score)
+    def svi_guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
+        self.guide(x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number)
 
     @pyro_method
-    def svi_model(self, x, age, sex, ventricle_volume, brain_volume, duration, score):
+    def svi_model(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
         with pyro.plate('observations', x.shape[0]):
             pyro.condition(self.model,
                 data={'x': x, 'sex': sex, 'age': age,
                       'ventricle_volume': ventricle_volume,
                       'brain_volume': brain_volume,
                       'duration': duration,
-                      'score': score})()
+                      'score': score,
+                      'slice_number': slice_number})()
 
     @pyro_method
     def infer_z(self, *args, **kwargs):
@@ -271,7 +274,7 @@ class BaseVISEM(BaseSEM):
     @staticmethod
     def _check_observation(obs):
         keys = obs.keys()
-        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'score', 'duration'}
+        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'score', 'duration', 'slice_number'}
         assert required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
     @pyro_method
@@ -283,11 +286,11 @@ class BaseVISEM(BaseSEM):
         return exogeneous
 
     @pyro_method
-    def reconstruct(self, x, age, sex, ventricle_volume, brain_volume, duration, score,
+    def reconstruct(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number,
                     num_particles:int=1):
         obs = {'x': x, 'sex': sex, 'age': age,
                'ventricle_volume': ventricle_volume, 'brain_volume': brain_volume,
-               'duration': duration, 'score': score}
+               'duration': duration, 'score': score, 'slice_number': slice_number}
         z_dist = pyro.poutine.trace(self.guide).get_trace(**obs).nodes['z']['fn']
 
         recons = []
@@ -301,6 +304,7 @@ class BaseVISEM(BaseSEM):
                     'brain_volume': brain_volume,
                     'duration': duration,
                     'score': score,
+                    'slice_number': slice_number,
                     'z': z})(x.shape[0])
             recons += [recon]
         return torch.stack(recons).mean(0)
@@ -316,14 +320,17 @@ class BaseVISEM(BaseSEM):
 
             exogeneous = self.infer_exogeneous(z=z, **obs)
             exogeneous['z'] = z
-            # condition on sex if sex isn't included in 'do' as it's a root node and we don't have the exogeneous noise for it yet...
+            # condition on these vars if they aren't included in 'do' as they are root nodes
+            # and we don't have the exogeneous noise for them yet
             if 'sex' not in condition.keys():
                 exogeneous['sex'] = obs['sex']
+            if 'slice_number' not in condition.keys():
+                exogeneous['slice_number'] = obs['slice_number']
 
             # sample_scm calls model hence the strings in the zip in the return statement
             counter = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogeneous), data=condition)(obs['x'].shape[0])
             counterfactuals += [counter]
-        return {k: v for k, v in zip(('x', 'z', 'age', 'sex', 'ventricle_volume', 'brain_volume', 'duration', 'score'),
+        return {k: v for k, v in zip(('x', 'z', 'age', 'sex', 'ventricle_volume', 'brain_volume', 'duration', 'score', 'slice_number'),
                                      (torch.stack(c).mean(0) for c in zip(*counterfactuals)))}
 
     @classmethod
@@ -426,6 +433,7 @@ class SVIExperiment(BaseCovariateExperiment):
         metrics['log p(brain_volume)'] = model.nodes['brain_volume']['log_prob'].mean()
         metrics['log p(score)'] = model.nodes['score']['log_prob'].mean()
         metrics['log p(duration)'] = model.nodes['duration']['log_prob'].mean()
+        metrics['log p(slice_number)'] = model.nodes['slice_number']['log_prob'].mean()
         metrics['log p(z)'] = model.nodes['z']['log_prob'].mean()
         metrics['log q(z)'] = guide.nodes['z']['log_prob'].mean()
         metrics['log p(z) - log q(z)'] = metrics['log p(z)'] - metrics['log q(z)']
@@ -439,11 +447,13 @@ class SVIExperiment(BaseCovariateExperiment):
         brain_volume = batch['brain_volume'].unsqueeze(1).float()
         score = batch['score'].unsqueeze(1).float()
         duration = batch['duration'].unsqueeze(1).float()
+        slice_number = batch['slice_number'].unsqueeze(1).float()
         x = x.float()
         if self.training:
             x += torch.rand_like(x)
         return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
-                'brain_volume': brain_volume, 'score': score, 'duration': duration}
+                'brain_volume': brain_volume, 'score': score, 'duration': duration,
+                'slice_number': slice_number}
 
     def training_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)
