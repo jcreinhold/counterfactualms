@@ -161,7 +161,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
         cond = {k: torch.tensor([[v]]) for k, v in intervention.items()}
         counterfactual = loaded_models[model_name].counterfactual(orig_data, cond, num_samples)
         imgs += [counterfactual['x']]
-        diff = (orig_data['x'] - imgs[-1]).squeeze()
+        diff = (imgs[-1] - orig_data['x']).squeeze()
         lim = np.maximum(lim, diff.abs().max())
 
     for i, intervention in enumerate(interventions):
@@ -201,14 +201,15 @@ def interactive_plot(model_name):
         cond = {k: torch.tensor([[v]]) for k, v in intervention.items()}
         counterfactual = loaded_models[model_name].counterfactual(orig_data, cond, num_samples)
         x = counterfactual['x']
-        diff = (x_test - x).squeeze()
+        diff = (x - x_test).squeeze()
         lim = diff.abs().max()
         ax[1].set_title('Original')
         ax[1].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
         ax[2].set_title(fmt_intervention(intervention))
         ax[2].imshow(np.rot90(x.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
         ax[3].set_title('Difference')
-        ax[3].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
+        im = ax[3].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
+        plt.colorbar(im)
         for axi in ax:
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
@@ -224,6 +225,7 @@ def interactive_plot(model_name):
         ax[0].text(0.5, 0.5, att_str, horizontalalignment='center',
                       verticalalignment='center', transform=ax[0].transAxes,
                       fontsize=mpl.rcParams['axes.titlesize'])
+        fig.tight_layout()
         plt.show()
 
     from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
@@ -277,15 +279,15 @@ def interactive_plot(model_name):
         do_lesion_volume=Checkbox(description='do(lesion_volume)'),
         slice_brain_volume=FloatSlider(min=6., max=18., step=0.5, continuous_update=False, description='Slice Brain Volume (ml):', style={'description_width': 'initial'}),
         do_slice_brain_volume=Checkbox(description='do(slice_brain_volume)'),
-        slice_ventricle_volume=FloatSlider(min=1e-5, max=2.5, step=0.1, continuous_update=False, description='Slice Ventricle Volume (ml):', style={'description_width': 'initial'}),
+        slice_ventricle_volume=FloatSlider(min=1e-5, max=3.0, step=0.1, continuous_update=False, description='Slice Ventricle Volume (ml):', style={'description_width': 'initial'}),
         do_slice_ventricle_volume=Checkbox(description='do(slice_ventricle_volume)'),
-        slice_lesion_volume=FloatSlider(min=1e-5, max=2.0, step=0.1, continuous_update=False, description='Slice Lesion Volume (ml):', style={'description_width': 'initial'}),
+        slice_lesion_volume=FloatSlider(min=1e-5, max=3.0, step=0.1, continuous_update=False, description='Slice Lesion Volume (ml):', style={'description_width': 'initial'}),
         do_slice_lesion_volume=Checkbox(description='do(slice_lesion_volume)'),
         duration=FloatSlider(min=1e-5, max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
         do_duration=Checkbox(description='do(duration)'),
         score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
         do_score=Checkbox(description='do(score)'),
-        slice_number=FloatSlider(min=slice_min, max=slice_max, step=1., continuous_update=False, description='Slice #:', style={'description_width': 'initial'}),
+        slice_number=FloatSlider(min=round(slice_min.item()), max=round(slice_max.item()), step=1., continuous_update=False, description='Slice #:', style={'description_width': 'initial'}),
         do_slice_number=Checkbox(description='do(slice_number)'),
         )
 
