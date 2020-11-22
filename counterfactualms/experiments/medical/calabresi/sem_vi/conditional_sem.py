@@ -97,7 +97,7 @@ class ConditionalVISEM(BaseVISEM):
         total_brain_volume_ = self.total_brain_volume_flow_constraint_transforms.inv(total_brain_volume)
 
         total_ventricle_context = torch.cat([age_, total_brain_volume_], 1)
-        total_ventricle_volume_base_dist = Normal(self.total_ventricle_volume_base_loc, self.total_ventricle_volume_base_scale).to_etotal_vent(1)
+        total_ventricle_volume_base_dist = Normal(self.total_ventricle_volume_base_loc, self.total_ventricle_volume_base_scale).to_event(1)
         total_ventricle_volume_dist = ConditionalTransformedDistribution(total_ventricle_volume_base_dist, self.total_ventricle_volume_flow_transforms).condition(total_ventricle_context)  # noqa: E501
         total_ventricle_volume = pyro.sample('total_ventricle_volume', total_ventricle_volume_dist)
         _ = self.total_ventricle_volume_flow_components
@@ -115,7 +115,7 @@ class ConditionalVISEM(BaseVISEM):
         score_dist = ConditionalTransformedDistribution(score_base_dist, self.score_flow_transforms).condition(score_context)  # noqa: E501
         score = pyro.sample('score', score_dist)
         _ = self.score_flow_components
-        score_ = pyro.sample('score', score_dist)
+        score_ = self.score_flow_constraint_transforms.inv(score)
 
         total_lesion_context = torch.cat([total_brain_volume_, duration_, score_], 1)
         total_lesion_volume_base_dist = Normal(self.total_lesion_volume_base_loc, self.total_lesion_volume_base_scale).to_event(1)
@@ -165,7 +165,8 @@ class ConditionalVISEM(BaseVISEM):
 
         x = pyro.sample('x', x_dist)
 
-        return obs.update(dict(x=x, z=z))
+        obs.update(dict(x=x, z=z))
+        return obs
 
     @pyro_method
     def guide(self, obs):

@@ -79,20 +79,20 @@ class BaseSEM(PyroModule):
     def sample(self, n_samples=1):
         with pyro.plate('observations', n_samples):
             samples = self.model()
-        return (*samples,)
+        return samples
 
     @pyro_method
     def sample_scm(self, n_samples=1):
         with pyro.plate('observations', n_samples):
             samples = self.scm()
-        return (*samples,)
+        return samples
 
     @pyro_method
     def infer_e_x(self, *args, **kwargs):
         raise NotImplementedError()
 
     @pyro_method
-    def infer_exogeneous(self, **obs):
+    def infer_exogeneous(self, obs):
         # assuming that we use transformed distributions for everything:
         cond_sample = pyro.condition(self.sample, data=obs)
         cond_trace = pyro.poutine.trace(cond_sample).get_trace(obs['x'].shape[0])
@@ -111,7 +111,7 @@ class BaseSEM(PyroModule):
         return output
 
     @pyro_method
-    def infer(self, **obs):
+    def infer(self, obs):
         raise NotImplementedError()
 
     @pyro_method
@@ -329,7 +329,7 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def build_test_samples(self, batch):
         samples = {}
-        samples['reconstruction'] = {'x': self.pyro_model.reconstruct(**batch, num_particles=self.hparams.num_sample_particles)}
+        samples['reconstruction'] = {'x': self.pyro_model.reconstruct(batch, num_particles=self.hparams.num_sample_particles)}
 
         counterfactuals = self.get_counterfactual_conditions(batch)
 
@@ -384,7 +384,7 @@ class BaseCovariateExperiment(pl.LightningModule):
     def build_reconstruction(self, obs, tag='reconstruction'):
         self._check_observation(obs)
         x = obs['x']
-        recon = self.pyro_model.reconstruct(**obs, num_particles=self.hparams.num_sample_particles)
+        recon = self.pyro_model.reconstruct(obs, num_particles=self.hparams.num_sample_particles)
         self.log_img_grid(tag, torch.cat([x, recon], 0))
         self.logger.experiment.add_scalar(f'{tag}/mse', torch.mean(torch.square(x - recon).sum((1, 2, 3))), self.current_epoch)
 
@@ -452,38 +452,37 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_ventricle_volume = sample_trace.nodes['ventricle_volume']['value']
             sampled_lesion_volume = sample_trace.nodes['lesion_volume']['value']
 
-            self.log_img_grid('samples', samples.data[:8])
+            s = samples.shape[0] // 8
+            self.log_img_grid('samples', samples.data[::s])
 
             cond_data = {'brain_volume': self.brain_volume_range,
                          'ventricle_volume': self.ventricle_volume_range,
                          'lesion_volume': self.lesion_volume_range,
                          'z': self.z_range}
-            samples, *_ = pyro.condition(self.pyro_model.sample, data=cond_data)(9)
+            samples = pyro.condition(self.pyro_model.sample, data=cond_data)(9)['x']
             self.log_img_grid('cond_samples', samples.data, nrow=3)
 
             obs_batch = self.prep_batch(self.get_batch(self.val_loader))
 
             kde_data = {
                 'batch': {'brain_volume': obs_batch['brain_volume'],
-                          'ventricle_volume': obs_batch['ventricle_volume'],
-                          'lesion_volume': obs_batch['lesion_volume']},
+                          'ventricle_volume': obs_batch['ventricle_volume']},
                 'sampled': {'brain_volume': sampled_brain_volume,
-                            'ventricle_volume': sampled_ventricle_volume,
-                            'lesion_volume': sampled_lesion_volume}
+                            'ventricle_volume': sampled_ventricle_volume}
             }
             self.log_kdes('sample_kde', kde_data, save_img=True)
 
-            exogeneous = self.pyro_model.infer(**obs_batch)
+            exogeneous = self.pyro_model.infer(obs_batch)
 
             for (tag, val) in exogeneous.items():
                 self.logger.experiment.add_histogram(tag, val, self.current_epoch)
 
-            obs_batch = {k: v[:8] for k, v in obs_batch.items()}
+            obs_batch = {k: v[::s] for k, v in obs_batch.items()}
 
             self.log_img_grid('input', obs_batch['x'], save_img=True)
 
             if hasattr(self.pyro_model, 'reconstruct'):
-                self.build_reconstruction(**obs_batch)
+                self.build_reconstruction(obs_batch)
 
             conditions = {
                 '20': {'age': torch.zeros_like(obs_batch['age']) + 20},

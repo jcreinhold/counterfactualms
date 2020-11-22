@@ -149,14 +149,17 @@ class BaseVISEM(BaseSEM):
         self.slice_number_low = torch.nn.Parameter(torch.zeros([1, ]))
         self.slice_number_high = torch.nn.Parameter(torch.zeros([1, ]) + 241.)
 
-        for k in self.required_data - {'sex', 'slice_number'}:
+        for k in self.required_data - {'sex', 'slice_number', 'x'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
-            self.register_buffer(f'{k}_base_loc', torch.ones([1, ], requires_grad=False))
+            self.register_buffer(f'{k}_base_scale', torch.ones([1, ], requires_grad=False))
+
+        self.register_buffer('x_base_loc', torch.zeros(self.img_shape, requires_grad=False))
+        self.register_buffer('x_base_scale', torch.ones(self.img_shape, requires_grad=False))
 
         self.register_buffer('z_loc', torch.zeros([latent_dim, ], requires_grad=False))
         self.register_buffer('z_scale', torch.ones([latent_dim, ], requires_grad=False))
 
-        for k in self.required_data - {'sex', 'slice_number'}:
+        for k in self.required_data - {'sex', 'slice_number', 'x'}:
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
@@ -252,37 +255,38 @@ class BaseVISEM(BaseSEM):
         assert self.required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
     @pyro_method
-    def infer(self, **obs):
+    def infer(self, obs):
         self._check_observation(obs)
-        z = self.infer_z(**obs)
-        exogeneous = self.infer_exogeneous(z=z, **obs)
+        z = self.infer_z(obs)
+        obs.update(dict(z=z))
+        exogeneous = self.infer_exogeneous(obs)
         exogeneous['z'] = z
         return exogeneous
 
     @pyro_method
     def reconstruct(self, obs, num_particles:int=1):
         self._check_observation(obs)
-        z_dist = pyro.poutine.trace(self.guide).get_trace(**obs).nodes['z']['fn']
+        z_dist = pyro.poutine.trace(self.guide).get_trace(obs).nodes['z']['fn']
         batch_size = obs['x'].shape[0]
         recons = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
-            obs = obs.update({'z': z})
-            recon, *_ = pyro.poutine.condition(
+            obs.update({'z': z})
+            recon = pyro.poutine.condition(
                 self.sample, data=obs)(batch_size)
-            recons += [recon]
+            recons += [recon['x']]
         return torch.stack(recons).mean(0)
 
     @pyro_method
     def counterfactual(self, obs:Mapping, condition:Mapping=None, num_particles:int=1):
         self._check_observation(obs)
-        z_dist = pyro.poutine.trace(self.guide).get_trace(**obs).nodes['z']['fn']
+        z_dist = pyro.poutine.trace(self.guide).get_trace(obs).nodes['z']['fn']
 
         counterfactuals = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
-
-            exogeneous = self.infer_exogeneous(z=z, **obs)
+            obs.update(dict(z=z))
+            exogeneous = self.infer_exogeneous(obs)
             exogeneous['z'] = z
             # condition on these vars if they aren't included in 'do' as they are root nodes
             # and we don't have the exogeneous noise for them yet
@@ -292,14 +296,15 @@ class BaseVISEM(BaseSEM):
                 exogeneous['slice_number'] = obs['slice_number']
 
             # sample_scm calls model hence the strings in the zip in the return statement
-            counter = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogeneous), data=condition)(obs['x'].shape[0])
+            n = obs['x'].shape[0]
+            counter = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogeneous), data=condition)(n)
             counterfactuals += [counter]
 
         out = {k: [] for k in self.required_data}
         for c in counterfactuals:
             for k in self.required_data:
                 out[k].append(c[k])
-        out = {k: torch.stack(v).mean() for k, v in out.items()}
+        out = {k: torch.stack(v).mean(0) for k, v in out.items()}
         return out
 
     @classmethod
@@ -354,8 +359,8 @@ class SVIExperiment(BaseCovariateExperiment):
         with torch.no_grad():
             logger.info('Traces:\n' + ('#' * 10))
 
-            guide_trace = pyro.poutine.trace(self.pyro_model.svi_guide).get_trace(**batch)
-            model_trace = pyro.poutine.trace(pyro.poutine.replay(self.pyro_model.svi_model, trace=guide_trace)).get_trace(**batch)
+            guide_trace = pyro.poutine.trace(self.pyro_model.svi_guide).get_trace(batch)
+            model_trace = pyro.poutine.trace(pyro.poutine.replay(self.pyro_model.svi_model, trace=guide_trace)).get_trace(batch)
 
             guide_trace = pyro.poutine.util.prune_subsample_sites(guide_trace)
             model_trace = pyro.poutine.util.prune_subsample_sites(model_trace)
@@ -418,7 +423,7 @@ class SVIExperiment(BaseCovariateExperiment):
         if self.hparams.validate:
             logging.info('Validation:')
             self.print_trace_updates(batch)
-        loss = self.svi.step(**batch)
+        loss = self.svi.step(batch)
         metrics = self.get_trace_metrics(batch)
         if np.isnan(loss):
             self.logger.experiment.add_text('nan', f'nand at {self.current_epoch}:\n{metrics}')
@@ -429,13 +434,13 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def validation_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)
-        loss = self.svi.evaluate_loss(**batch)
+        loss = self.svi.evaluate_loss(batch)
         metrics = self.get_trace_metrics(batch)
         return {'loss': loss, **metrics}
 
     def test_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)
-        loss = self.svi.evaluate_loss(**batch)
+        loss = self.svi.evaluate_loss(batch)
         metrics = self.get_trace_metrics(batch)
         samples = self.build_test_samples(batch)
         return {'loss': loss, **metrics, 'samples': samples}
