@@ -73,17 +73,20 @@ class ConditionalVISEM(BaseVISEM):
     @pyro_method
     def pgm_model(self):
         sex_dist = Bernoulli(logits=self.sex_logits).to_event(1)
+        # pseudo call to register with pyro
         _ = self.sex_logits
         sex = pyro.sample('sex', sex_dist)
 
-        slice_number_dist = Uniform(low=self.slice_number_min, high=self.slice_number_max).to_event(1)
+        slice_number_base_dist = Normal(self.slice_number_base_loc, self.slice_number_base_scale).to_event(1)
+        slice_number_dist = TransformedDistribution(slice_number_base_dist, self.slice_number_flow_transforms)
         slice_number = pyro.sample('slice_number', slice_number_dist)
+        slice_number_ = self.slice_number_flow_constraint_transforms.inv(slice_number)
+        _ = self.slice_number_flow_components
 
         age_base_dist = Normal(self.age_base_loc, self.age_base_scale).to_event(1)
         age_dist = TransformedDistribution(age_base_dist, self.age_flow_transforms)
         age = pyro.sample('age', age_dist)
         age_ = self.age_flow_constraint_transforms.inv(age)
-        # pseudo call to register with pyro
         _ = self.age_flow_components
 
         brain_context = torch.cat([sex, age_], 1)
@@ -121,20 +124,20 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.lesion_volume_flow_components
         lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(lesion_volume)
 
-        slice_brain_context = torch.cat([brain_volume_, slice_number], 1)
+        slice_brain_context = torch.cat([brain_volume_, slice_number_], 1)
         slice_brain_volume_base_dist = Normal(self.slice_brain_volume_base_loc, self.slice_brain_volume_base_scale).to_event(1)
         slice_brain_volume_dist = ConditionalTransformedDistribution(slice_brain_volume_base_dist, self.slice_brain_volume_flow_transforms).condition(slice_brain_context)
         slice_brain_volume = pyro.sample('slice_brain_volume', slice_brain_volume_dist)
         _ = self.slice_brain_volume_flow_components
         slice_brain_volume_ = self.slice_brain_volume_flow_constraint_transforms.inv(slice_brain_volume)
 
-        slice_ventricle_context = torch.cat([slice_brain_volume_, ventricle_volume_, slice_number], 1)
+        slice_ventricle_context = torch.cat([slice_brain_volume_, ventricle_volume_, slice_number_], 1)
         slice_ventricle_volume_base_dist = Normal(self.slice_ventricle_volume_base_loc, self.slice_ventricle_volume_base_scale).to_event(1)
         slice_ventricle_volume_dist = ConditionalTransformedDistribution(slice_ventricle_volume_base_dist, self.slice_ventricle_volume_flow_transforms).condition(slice_ventricle_context)  # noqa: E501
         slice_ventricle_volume = pyro.sample('slice_ventricle_volume', slice_ventricle_volume_dist)
         _ = self.slice_ventricle_volume_flow_components
 
-        slice_lesion_context = torch.cat([slice_brain_volume_, lesion_volume_, slice_number], 1)
+        slice_lesion_context = torch.cat([slice_brain_volume_, lesion_volume_, slice_number_], 1)
         slice_lesion_volume_base_dist = Normal(self.slice_lesion_volume_base_loc, self.slice_lesion_volume_base_scale).to_event(1)
         slice_lesion_volume_dist = ConditionalTransformedDistribution(slice_lesion_volume_base_dist, self.slice_lesion_volume_flow_transforms).condition(slice_lesion_context)
         slice_lesion_volume = pyro.sample('slice_lesion_volume', slice_lesion_volume_dist)

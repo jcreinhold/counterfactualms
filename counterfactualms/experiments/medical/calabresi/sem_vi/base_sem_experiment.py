@@ -149,7 +149,7 @@ class BaseVISEM(BaseSEM):
         self.register_buffer('slice_number_min', torch.zeros([1, ], requires_grad=False))
         self.register_buffer('slice_number_max', torch.zeros([1, ], requires_grad=False))
 
-        for k in self.required_data - {'sex', 'slice_number', 'x'}:
+        for k in self.required_data - {'sex', 'x'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
             self.register_buffer(f'{k}_base_scale', torch.ones([1, ], requires_grad=False))
 
@@ -163,11 +163,20 @@ class BaseVISEM(BaseSEM):
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
+        self.register_buffer(f'slice_number_flow_norm_loc', torch.zeros([], requires_grad=False))
+        self.register_buffer(f'slice_number_flow_norm_scale', torch.ones([], requires_grad=False))
+
         # age flow
         self.age_flow_components = ComposeTransformModule([Spline(1)])
         self.age_flow_lognorm = AffineTransform(loc=self.age_flow_lognorm_loc.item(), scale=self.age_flow_lognorm_scale.item())
         self.age_flow_constraint_transforms = ComposeTransform([self.age_flow_lognorm, ExpTransform()])
         self.age_flow_transforms = ComposeTransform([self.age_flow_components, self.age_flow_constraint_transforms])
+
+        # slice number flow
+        self.slice_number_flow_components = ComposeTransformModule([Spline(1)])
+        self.slice_number_flow_norm = AffineTransform(loc=self.slice_number_flow_norm_loc.item(), scale=self.slice_number_flow_norm_scale.item())
+        self.slice_number_flow_constraint_transforms = ComposeTransform([SigmoidTransform(), self.slice_number_flow_norm])
+        self.slice_number_flow_transforms = ComposeTransform([self.slice_number_flow_components, self.slice_number_flow_constraint_transforms])
 
         # other flows shared components
         self.ventricle_volume_flow_lognorm = AffineTransform(loc=self.ventricle_volume_flow_lognorm_loc.item(), scale=self.ventricle_volume_flow_lognorm_scale.item())  # noqa: E501
@@ -202,6 +211,12 @@ class BaseVISEM(BaseSEM):
         elif 'flow_lognorm_scale' in name:
             name_ = name.replace('flow_lognorm_scale', '')
             getattr(self, name_ + 'flow_lognorm').scale = value.item()
+        if 'flow_norm_loc' in name:
+            name_ = name.replace('flow_norm_loc', '')
+            getattr(self, name_ + 'flow_norm').loc = value.item()
+        elif 'flow_norm_scale' in name:
+            name_ = name.replace('flow_norm_scale', '')
+            getattr(self, name_ + 'flow_norm').scale = value.item()
 
     def _get_preprocess_transforms(self):
         return super()._get_preprocess_transforms().inv
