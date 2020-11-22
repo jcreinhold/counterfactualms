@@ -179,14 +179,14 @@ class BaseVISEM(BaseSEM):
         self.lesion_volume_flow_lognorm = AffineTransform(loc=self.lesion_volume_flow_lognorm_loc.item(), scale=self.lesion_volume_flow_lognorm_scale.item())
         self.lesion_volume_flow_constraint_transforms = ComposeTransform([self.lesion_volume_flow_lognorm, ExpTransform()])
 
-        self.total_ventricle_volume_flow_lognorm = AffineTransform(loc=self.total_ventricle_volume_flow_lognorm_loc.item(), scale=self.total_ventricle_volume_flow_lognorm_scale.item())  # noqa: E501
-        self.total_ventricle_volume_flow_constraint_transforms = ComposeTransform([self.total_ventricle_volume_flow_lognorm, ExpTransform()])
+        self.slice_ventricle_volume_flow_lognorm = AffineTransform(loc=self.slice_ventricle_volume_flow_lognorm_loc.item(), scale=self.slice_ventricle_volume_flow_lognorm_scale.item())  # noqa: E501
+        self.slice_ventricle_volume_flow_constraint_transforms = ComposeTransform([self.slice_ventricle_volume_flow_lognorm, ExpTransform()])
 
-        self.total_brain_volume_flow_lognorm = AffineTransform(loc=self.total_brain_volume_flow_lognorm_loc.item(), scale=self.total_brain_volume_flow_lognorm_scale.item())
-        self.total_brain_volume_flow_constraint_transforms = ComposeTransform([self.total_brain_volume_flow_lognorm, ExpTransform()])
+        self.slice_brain_volume_flow_lognorm = AffineTransform(loc=self.slice_brain_volume_flow_lognorm_loc.item(), scale=self.slice_brain_volume_flow_lognorm_scale.item())
+        self.slice_brain_volume_flow_constraint_transforms = ComposeTransform([self.slice_brain_volume_flow_lognorm, ExpTransform()])
 
-        self.total_lesion_volume_flow_lognorm = AffineTransform(loc=self.total_lesion_volume_flow_lognorm_loc.item(), scale=self.total_lesion_volume_flow_lognorm_scale.item())
-        self.total_lesion_volume_flow_constraint_transforms = ComposeTransform([self.total_lesion_volume_flow_lognorm, ExpTransform()])
+        self.slice_lesion_volume_flow_lognorm = AffineTransform(loc=self.slice_lesion_volume_flow_lognorm_loc.item(), scale=self.slice_lesion_volume_flow_lognorm_scale.item())
+        self.slice_lesion_volume_flow_constraint_transforms = ComposeTransform([self.slice_lesion_volume_flow_lognorm, ExpTransform()])
 
         self.duration_flow_lognorm = AffineTransform(loc=self.duration_flow_lognorm_loc.item(), scale=self.duration_flow_lognorm_scale.item())
         self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_lognorm, ExpTransform()])
@@ -247,7 +247,7 @@ class BaseVISEM(BaseSEM):
     @property
     def required_data(self):
         return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
-                'total_ventricle_volume', 'total_brain_volume', 'total_lesion_volume',
+                'slice_ventricle_volume', 'slice_brain_volume', 'slice_lesion_volume',
                 'score', 'duration', 'slice_number'}
 
     def _check_observation(self, obs):

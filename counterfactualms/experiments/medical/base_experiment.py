@@ -157,12 +157,12 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         self.torch_device = self.trainer.root_gpu if self.trainer.on_gpu else self.trainer.root_device
 
-        brain_volumes = torch.linspace(8000., 16000., 3, dtype=torch.float, device=self.torch_device)
-        self.brain_volume_range = brain_volumes.repeat(3).unsqueeze(1)
-        ventricle_volumes = torch.linspace(10., 2500., 3, dtype=torch.float, device=self.torch_device)
-        self.ventricle_volume_range = ventricle_volumes.repeat_interleave(3).unsqueeze(1)
-        lesion_volumes = torch.linspace(1e-5, 2000., 3, dtype=torch.float, device=self.torch_device)
-        self.lesion_volume_range = lesion_volumes.repeat_interleave(3).unsqueeze(1)
+        slice_brain_volumes = torch.linspace(8000., 16000., 3, dtype=torch.float, device=self.torch_device)
+        self.slice_brain_volume_range = slice_brain_volumes.repeat(3).unsqueeze(1)
+        slice_ventricle_volumes = torch.linspace(10., 2500., 3, dtype=torch.float, device=self.torch_device)
+        self.slice_ventricle_volume_range = slice_ventricle_volumes.repeat_interleave(3).unsqueeze(1)
+        slice_lesion_volumes = torch.linspace(1e-5, 2000., 3, dtype=torch.float, device=self.torch_device)
+        self.slice_lesion_volume_range = slice_lesion_volumes.repeat_interleave(3).unsqueeze(1)
         scores = torch.arange(-1., 6., dtype=torch.float, device=self.torch_device)
         self.score_range = scores.repeat_interleave(3).unsqueeze(1)
         self.z_range = torch.randn([1, self.hparams.latent_dim], dtype=torch.float, device=self.torch_device).repeat((9, 1))
@@ -191,26 +191,26 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.lesion_volume_flow_lognorm_loc = lesion_volume.log().mean().to(self.torch_device).float()
         self.pyro_model.lesion_volume_flow_lognorm_scale = lesion_volume.log().std().to(self.torch_device).float()
 
-        total_ventricle_volume = torch.from_numpy(self.calabresi_train.csv['total_ventricle_volume'].to_numpy())
-        self.pyro_model.total_ventricle_volume_flow_lognorm_loc = total_ventricle_volume.log().mean().to(self.torch_device).float()
-        self.pyro_model.total_ventricle_volume_flow_lognorm_scale = total_ventricle_volume.log().std().to(self.torch_device).float()
+        slice_ventricle_volume = torch.from_numpy(self.calabresi_train.csv['slice_ventricle_volume'].to_numpy())
+        self.pyro_model.slice_ventricle_volume_flow_lognorm_loc = slice_ventricle_volume.log().mean().to(self.torch_device).float()
+        self.pyro_model.slice_ventricle_volume_flow_lognorm_scale = slice_ventricle_volume.log().std().to(self.torch_device).float()
 
-        total_brain_volume = torch.from_numpy(self.calabresi_train.csv['total_brain_volume'].to_numpy())
-        self.pyro_model.total_brain_volume_flow_lognorm_loc = total_brain_volume.log().mean().to(self.torch_device).float()
-        self.pyro_model.total_brain_volume_flow_lognorm_scale = total_brain_volume.log().std().to(self.torch_device).float()
+        slice_brain_volume = torch.from_numpy(self.calabresi_train.csv['slice_brain_volume'].to_numpy())
+        self.pyro_model.slice_brain_volume_flow_lognorm_loc = slice_brain_volume.log().mean().to(self.torch_device).float()
+        self.pyro_model.slice_brain_volume_flow_lognorm_scale = slice_brain_volume.log().std().to(self.torch_device).float()
 
-        total_lesion_volume = torch.from_numpy(self.calabresi_train.csv['total_lesion_volume'].to_numpy())
-        self.pyro_model.total_lesion_volume_flow_lognorm_loc = total_lesion_volume.log().mean().to(self.torch_device).float()
-        self.pyro_model.total_lesion_volume_flow_lognorm_scale = total_lesion_volume.log().std().to(self.torch_device).float()
+        slice_lesion_volume = torch.from_numpy(self.calabresi_train.csv['slice_lesion_volume'].to_numpy())
+        self.pyro_model.slice_lesion_volume_flow_lognorm_loc = slice_lesion_volume.log().mean().to(self.torch_device).float()
+        self.pyro_model.slice_lesion_volume_flow_lognorm_scale = slice_lesion_volume.log().std().to(self.torch_device).float()
 
         if self.hparams.validate:
             logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')
             logger.info(f'set brain_volume_flow_lognorm {self.pyro_model.brain_volume_flow_lognorm.loc} +/- {self.pyro_model.brain_volume_flow_lognorm.scale}')
             logger.info(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
             logger.info(f'set lesion_volume_flow_lognorm {self.pyro_model.lesion_volume_flow_lognorm.loc} +/- {self.pyro_model.lesion_volume_flow_lognorm.scale}')  # noqa: E501
-            logger.info(f'set total_brain_volume_flow_lognorm {self.pyro_model.total_brain_volume_flow_lognorm.loc} +/- {self.pyro_model.total_brain_volume_flow_lognorm.scale}')
-            logger.info(f'set total_ventricle_volume_flow_lognorm {self.pyro_model.total_ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.total_ventricle_volume_flow_lognorm.scale}')  # noqa: E501
-            logger.info(f'set total_lesion_volume_flow_lognorm {self.pyro_model.total_lesion_volume_flow_lognorm.loc} +/- {self.pyro_model.total_lesion_volume_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set slice_brain_volume_flow_lognorm {self.pyro_model.slice_brain_volume_flow_lognorm.loc} +/- {self.pyro_model.slice_brain_volume_flow_lognorm.scale}')
+            logger.info(f'set slice_ventricle_volume_flow_lognorm {self.pyro_model.slice_ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.slice_ventricle_volume_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set slice_lesion_volume_flow_lognorm {self.pyro_model.slice_lesion_volume_flow_lognorm.loc} +/- {self.pyro_model.slice_lesion_volume_flow_lognorm.scale}')  # noqa: E501
             logger.info(f'set duration_flow_lognorm {self.pyro_model.duration_flow_lognorm.loc} +/- {self.pyro_model.duration_flow_lognorm.scale}')  # noqa: E501
             logger.info(f'set score_flow_lognorm {self.pyro_model.score_flow_lognorm.loc} +/- {self.pyro_model.score_flow_lognorm.scale}')  # noqa: E501
 
@@ -260,9 +260,9 @@ class BaseCovariateExperiment(pl.LightningModule):
         samples['unconditional_samples'] = {k: sample_trace.nodes['x']['value'].cpu() for k in self.required_data}
 
         cond_data = {
-            'brain_volume': self.brain_volume_range.repeat(self.hparams.test_batch_size, 1),
-            'ventricle_volume': self.ventricle_volume_range.repeat(self.hparams.test_batch_size, 1),
-            'lesion_volume': self.lesion_volume_range.repeat(self.hparams.test_batch_size, 1),
+            'slice_brain_volume': self.slice_brain_volume_range.repeat(self.hparams.test_batch_size, 1),
+            'slice_ventricle_volume': self.slice_ventricle_volume_range.repeat(self.hparams.test_batch_size, 1),
+            'slice_lesion_volume': self.slice_lesion_volume_range.repeat(self.hparams.test_batch_size, 1),
             'z': torch.randn([self.hparams.test_batch_size, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat_interleave(9, 0)
         }
         sample_trace = pyro.poutine.trace(pyro.condition(self.pyro_model.sample, data=cond_data)).get_trace(9 * self.hparams.test_batch_size)
@@ -320,12 +320,12 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def get_counterfactual_conditions(self, batch):
         counterfactuals = {
-            'do(brain_volume=8000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 8000},
-            'do(brain_volume=16000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 16000},
-            'do(ventricle_volume=500)': {'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 500},
-            'do(ventricle_volume=2000)': {'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 2000},
-            'do(lesion_volume=0)': {'lesion_volume': torch.ones_like(batch['lesion_volume']) * 1e-5},
-            'do(lesion_volume=1000)': {'lesion_volume': torch.ones_like(batch['lesion_volume']) * 1000.},
+            'do(slice_brain_volume=8000)':  {'slice_brain_volume': torch.ones_like(batch['slice_brain_volume']) * 8000},
+            'do(slice_brain_volume=16000)': {'slice_brain_volume': torch.ones_like(batch['slice_brain_volume']) * 16000},
+            'do(slice_ventricle_volume=500)':  {'slice_ventricle_volume': torch.ones_like(batch['slice_ventricle_volume']) * 500},
+            'do(slice_ventricle_volume=2000)': {'slice_ventricle_volume': torch.ones_like(batch['slice_ventricle_volume']) * 2000},
+            'do(slice_lesion_volume=0)':    {'slice_lesion_volume': torch.ones_like(batch['slice_lesion_volume']) * 1e-5},
+            'do(slice_lesion_volume=1000)': {'slice_lesion_volume': torch.ones_like(batch['slice_lesion_volume']) * 1000.},
             'do(age=20)': {'age': torch.ones_like(batch['age']) * 20},
             'do(age=60)': {'age': torch.ones_like(batch['age']) * 60},
             'do(sex=0)': {'sex': torch.zeros_like(batch['sex'])},
@@ -336,10 +336,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             'do(score=6)': {'type': torch.ones_like(batch['type']) * 6.},
             'do(slice_number=115)': {'type': torch.ones_like(batch['type']) * 115.},
             'do(slice_number=125)': {'type': torch.ones_like(batch['type']) * 125.},
-            'do(brain_volume=8000, ventricle_volume=500)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 8000.,
-                                                              'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 500.},
-            'do(brain_volume=16000, ventricle_volume=1000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 16000.,
-                                                                 'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 1000.}
+            'do(slice_brain_volume=8000, slice_ventricle_volume=500)': {'slice_brain_volume': torch.ones_like(batch['slice_brain_volume']) * 8000.,
+                                                                        'slice_ventricle_volume': torch.ones_like(batch['slice_ventricle_volume']) * 500.},
+            'do(slice_brain_volume=16000, slice_ventricle_volume=1000)': {'slice_brain_volume': torch.ones_like(batch['slice_brain_volume']) * 16000.,
+                                                                          'slice_ventricle_volume': torch.ones_like(batch['slice_ventricle_volume']) * 1000.}
         }
         return counterfactuals
 
@@ -407,7 +407,7 @@ class BaseCovariateExperiment(pl.LightningModule):
     @property
     def required_data(self):
         return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
-                'total_ventricle_volume', 'total_brain_volume', 'total_lesion_volume',
+                'slice_ventricle_volume', 'slice_brain_volume', 'slice_lesion_volume',
                 'score', 'duration', 'slice_number'}
 
     def _check_observation(self, obs):
@@ -417,44 +417,44 @@ class BaseCovariateExperiment(pl.LightningModule):
     def build_counterfactual(self, tag, obs, conditions, absolute=None):
         self._check_observation(obs)
         imgs = [obs['x']]
-        if absolute == 'brain_volume':
-            sampled_kdes = {'orig': {'brain_volume': obs['brain_volume']}}
+        if absolute == 'slice_brain_volume':
+            sampled_kdes = {'orig': {'slice_brain_volume': obs['slice_brain_volume']}}
         elif absolute == 'ventricle_volume':
-            sampled_kdes = {'orig': {'ventricle_volume': obs['ventricle_volume']}}
+            sampled_kdes = {'orig': {'slice_ventricle_volume': obs['slice_ventricle_volume']}}
         elif absolute == 'lesion_volume':
-            sampled_kdes = {'orig': {'lesion_volume': obs['lesion_volume']}}
+            sampled_kdes = {'orig': {'slice_lesion_volume': obs['slice_lesion_volume']}}
         elif absolute == 'score':
             sampled_kdes = {'orig': {'score': obs['score']}}
         elif absolute == 'duration':
             sampled_kdes = {'orig': {'duration': obs['duration']}}
         else:
-            sampled_kdes = {'orig': {'brain_volume': obs['brain_volume'],
-                                     'ventricle_volume': obs['ventricle_volume']}}
+            sampled_kdes = {'orig': {'slice_brain_volume': obs['slice_brain_volume'],
+                                     'slice_ventricle_volume': obs['slice_ventricle_volume']}}
 
         for name, data in conditions.items():
             counterfactual = self.pyro_model._gen_counterfactual(obs=obs, condition=data)
 
             counter = counterfactual['x']
-            sampled_brain_volume = counterfactual['brain_volume']
-            sampled_ventricle_volume = counterfactual['ventricle_volume']
-            sampled_lesion_volume = counterfactual['lesion_volume']
+            sampled_brain_volume = counterfactual['slice_brain_volume']
+            sampled_ventricle_volume = counterfactual['slice_ventricle_volume']
+            sampled_lesion_volume = counterfactual['slice_lesion_volume']
             sampled_score = counterfactual['score']
             sampled_duration = counterfactual['duration']
 
             imgs.append(counter)
-            if absolute == 'brain_volume':
-                sampled_kdes[name] = {'brain_volume': sampled_brain_volume}
-            elif absolute == 'ventricle_volume':
-                sampled_kdes[name] = {'ventricle_volume': sampled_ventricle_volume}
-            elif absolute == 'lesion_volume':
-                sampled_kdes[name] = {'lesion_volume': sampled_lesion_volume}
+            if absolute == 'slice_brain_volume':
+                sampled_kdes[name] = {'slice_brain_volume': sampled_brain_volume}
+            elif absolute == 'slice_ventricle_volume':
+                sampled_kdes[name] = {'slice_ventricle_volume': sampled_ventricle_volume}
+            elif absolute == 'slice_lesion_volume':
+                sampled_kdes[name] = {'slice_lesion_volume': sampled_lesion_volume}
             elif absolute == 'score':
                 sampled_kdes[name] = {'score': sampled_score}
             elif absolute == 'duration':
                 sampled_kdes[name] = {'duration': sampled_duration}
             else:
-                sampled_kdes[name] = {'brain_volume': sampled_brain_volume,
-                                      'ventricle_volume': sampled_ventricle_volume}
+                sampled_kdes[name] = {'slice_brain_volume': sampled_brain_volume,
+                                      'slice_ventricle_volume': sampled_ventricle_volume}
 
         self.log_img_grid(tag, torch.cat(imgs, 0))
         self.log_kdes(f'{tag}_sampled', sampled_kdes, save_img=True)
@@ -464,16 +464,15 @@ class BaseCovariateExperiment(pl.LightningModule):
             sample_trace = pyro.poutine.trace(self.pyro_model.sample).get_trace(self.hparams.test_batch_size)
 
             samples = sample_trace.nodes['x']['value']
-            sampled_brain_volume = sample_trace.nodes['brain_volume']['value']
-            sampled_ventricle_volume = sample_trace.nodes['ventricle_volume']['value']
-            sampled_lesion_volume = sample_trace.nodes['lesion_volume']['value']
+            sampled_brain_volume = sample_trace.nodes['slice_brain_volume']['value']
+            sampled_ventricle_volume = sample_trace.nodes['slice_ventricle_volume']['value']
 
             s = samples.shape[0] // 8
             self.log_img_grid('samples', samples.data[::s])
 
-            cond_data = {'brain_volume': self.brain_volume_range,
-                         'ventricle_volume': self.ventricle_volume_range,
-                         'lesion_volume': self.lesion_volume_range,
+            cond_data = {'slice_brain_volume': self.slice_brain_volume_range,
+                         'slice_ventricle_volume': self.slice_ventricle_volume_range,
+                         'slice_lesion_volume': self.slice_lesion_volume_range,
                          'z': self.z_range}
             samples = pyro.condition(self.pyro_model.sample, data=cond_data)(9)['x']
             self.log_img_grid('cond_samples', samples.data, nrow=3)
@@ -481,10 +480,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             obs_batch = self.prep_batch(self.get_batch(self.val_loader))
 
             kde_data = {
-                'batch': {'brain_volume': obs_batch['brain_volume'],
-                          'ventricle_volume': obs_batch['ventricle_volume']},
-                'sampled': {'brain_volume': sampled_brain_volume,
-                            'ventricle_volume': sampled_ventricle_volume}
+                'batch': {'slice_brain_volume': obs_batch['slice_brain_volume'],
+                          'slice_ventricle_volume': obs_batch['slice_ventricle_volume']},
+                'sampled': {'slice_brain_volume': sampled_brain_volume,
+                            'slice_ventricle_volume': sampled_ventricle_volume}
             }
             self.log_kdes('sample_kde', kde_data, save_img=True)
 
@@ -513,26 +512,26 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.build_counterfactual('do(sex=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
-                '10000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 10000},
-                '16000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 16000}
+                '10000': {'slice_brain_volume': torch.zeros_like(obs_batch['slice_brain_volume']) + 10000},
+                '16000': {'slice_brain_volume': torch.zeros_like(obs_batch['slice_brain_volume']) + 16000}
             }
-            self.build_counterfactual('do(brain_volume=x)', obs=obs_batch, conditions=conditions, absolute='brain_volume')
+            self.build_counterfactual('do(slice_brain_volume=x)', obs=obs_batch, conditions=conditions, absolute='slice_brain_volume')
 
             conditions = {
-                '10': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 10},
-                '1000': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 1000},
-                '2000': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 2000},
+                '10':   {'slice_ventricle_volume': torch.zeros_like(obs_batch['slice_ventricle_volume']) + 10},
+                '1000': {'slice_ventricle_volume': torch.zeros_like(obs_batch['slice_ventricle_volume']) + 1000},
+                '2000': {'slice_ventricle_volume': torch.zeros_like(obs_batch['slice_ventricle_volume']) + 2000},
 
             }
-            self.build_counterfactual('do(ventricle_volume=x)', obs=obs_batch, conditions=conditions, absolute='ventricle_volume')
+            self.build_counterfactual('do(slice_ventricle_volume=x)', obs=obs_batch, conditions=conditions, absolute='slice_ventricle_volume')
 
             conditions = {
-                '0': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 1e-5},
-                '500': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 500},
-                '1000': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 1000},
+                '0':    {'slice_lesion_volume': torch.zeros_like(obs_batch['slice_lesion_volume']) + 1e-5},
+                '500':  {'slice_lesion_volume': torch.zeros_like(obs_batch['slice_lesion_volume']) + 500},
+                '1000': {'slice_lesion_volume': torch.zeros_like(obs_batch['slice_lesion_volume']) + 1000},
 
             }
-            self.build_counterfactual('do(lesion_volume=x)', obs=obs_batch, conditions=conditions, absolute='lesion_volume')
+            self.build_counterfactual('do(slice_lesion_volume=x)', obs=obs_batch, conditions=conditions, absolute='slice_lesion_volume')
 
             conditions = {
                 '1': {'score': torch.zeros_like(obs_batch['score']) + 1.},

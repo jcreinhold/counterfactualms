@@ -123,9 +123,9 @@ def prep_data(batch):
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
     brain_volume = batch['brain_volume'].unsqueeze(0).unsqueeze(0).float()
     lesion_volume = batch['lesion_volume'].unsqueeze(0).unsqueeze(0).float()
-    total_ventricle_volume = batch['total_ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
-    total_brain_volume = batch['total_brain_volume'].unsqueeze(0).unsqueeze(0).float()
-    total_lesion_volume = batch['total_lesion_volume'].unsqueeze(0).unsqueeze(0).float()
+    slice_ventricle_volume = batch['slice_ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
+    slice_brain_volume = batch['slice_brain_volume'].unsqueeze(0).unsqueeze(0).float()
+    slice_lesion_volume = batch['slice_lesion_volume'].unsqueeze(0).unsqueeze(0).float()
     score = batch['score'].unsqueeze(0).unsqueeze(0).float()
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     type = batch['type'].unsqueeze(0).unsqueeze(0).float()
@@ -133,9 +133,9 @@ def prep_data(batch):
     x = x.float()
     return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
             'brain_volume': brain_volume, 'lesion_volume': lesion_volume,
-            'total_ventricle_volume': total_ventricle_volume,
-            'total_brain_volume': total_brain_volume,
-            'total_lesion_volume': total_lesion_volume,
+            'slice_ventricle_volume': slice_ventricle_volume,
+            'slice_brain_volume': slice_brain_volume,
+            'slice_lesion_volume': slice_lesion_volume,
             'score': score, 'duration': duration, 'type': type,
             'slice_number': slice_number}
 
@@ -224,11 +224,11 @@ def interactive_plot(model_name):
         if do_sex:
             intervention['sex'] = sex
         if do_brain_volume:
-            intervention['brain_volume'] = brain_volume * 1000.
+            intervention['slice_brain_volume'] = brain_volume * 1000.
         if do_ventricle_volume:
-            intervention['ventricle_volume'] = ventricle_volume * 1000.
+            intervention['slice_ventricle_volume'] = ventricle_volume * 1000.
         if do_lesion_volume:
-            intervention['lesion_volume'] = lesion_volume * 1000.
+            intervention['slice_lesion_volume'] = lesion_volume * 1000.
         if do_duration:
             intervention['duration'] = duration
         if do_score:
