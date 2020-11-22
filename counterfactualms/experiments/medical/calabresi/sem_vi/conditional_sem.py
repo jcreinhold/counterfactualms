@@ -9,8 +9,8 @@ from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment i
 
 
 class ConditionalVISEM(BaseVISEM):
-    # number of context dimensions for decoder (5 b/c brain vol, ventricle vol, lesion vol, slice number)
-    context_dim = 4
+    # number of context dimensions for decoder (3 b/c brain vol, ventricle vol, lesion vol)
+    context_dim = 3
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -158,7 +158,7 @@ class ConditionalVISEM(BaseVISEM):
         lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
         z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
-        latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_, obs['slice_number']], 1)
+        latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
         x_dist = self._get_transformed_x_dist(latent)
         x = pyro.sample('x', x_dist)
@@ -176,7 +176,7 @@ class ConditionalVISEM(BaseVISEM):
             brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
             lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
-            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_, obs['slice_number']], 1)
+            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
             latent_dist = self.latent_encoder.predict(hidden)
             z = pyro.sample('z', latent_dist)
 

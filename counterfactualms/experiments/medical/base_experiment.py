@@ -502,7 +502,6 @@ class BaseCovariateExperiment(pl.LightningModule):
 
             conditions = {
                 '20': {'age': torch.zeros_like(obs_batch['age']) + 20},
-                '40': {'age': torch.zeros_like(obs_batch['age']) + 40},
                 '60': {'age': torch.zeros_like(obs_batch['age']) + 60},
             }
             self.build_counterfactual('do(age=x)', obs=obs_batch, conditions=conditions)
@@ -514,28 +513,22 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.build_counterfactual('do(sex=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
-                '8000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 8000},
-                '10000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 11000},
-                '14000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 14000},
+                '10000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 10000},
                 '16000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 16000}
             }
             self.build_counterfactual('do(brain_volume=x)', obs=obs_batch, conditions=conditions, absolute='brain_volume')
 
             conditions = {
                 '10': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 10},
-                '175': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 175},
-                '500': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 500},
-                '900': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 900},
-                '1300': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 1300},
+                '1000': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 1000},
+                '2000': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 2000},
 
             }
             self.build_counterfactual('do(ventricle_volume=x)', obs=obs_batch, conditions=conditions, absolute='ventricle_volume')
 
             conditions = {
                 '0': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 1e-5},
-                '65': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 65},
-                '270': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 270},
-                '470': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 470},
+                '500': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 500},
                 '1000': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 1000},
 
             }
@@ -543,14 +536,12 @@ class BaseCovariateExperiment(pl.LightningModule):
 
             conditions = {
                 '1': {'score': torch.zeros_like(obs_batch['score']) + 1.},
-                '3': {'score': torch.zeros_like(obs_batch['score']) + 3.},
                 '5': {'score': torch.zeros_like(obs_batch['score']) + 5.}
             }
             self.build_counterfactual('do(score=x)', obs=obs_batch, conditions=conditions, absolute='score')
 
             conditions = {
                 '0': {'duration': torch.zeros_like(obs_batch['duration']) + 1e-5},
-                '5': {'duration': torch.zeros_like(obs_batch['duration']) + 5.},
                 '10': {'duration': torch.zeros_like(obs_batch['duration']) + 10.},
             }
             self.build_counterfactual('do(duration=x)', obs=obs_batch, conditions=conditions, absolute='duration')

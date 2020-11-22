@@ -268,12 +268,13 @@ class BaseVISEM(BaseSEM):
         self._check_observation(obs)
         z_dist = pyro.poutine.trace(self.guide).get_trace(obs).nodes['z']['fn']
         batch_size = obs['x'].shape[0]
+        obs_ = {k: v for k, v in obs.items() if k != 'x'}
         recons = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
-            obs.update({'z': z})
+            obs_.update({'z': z})
             recon = pyro.poutine.condition(
-                self.sample, data=obs)(batch_size)
+                self.sample, data=obs_)(batch_size)
             recons += [recon['x']]
         return torch.stack(recons).mean(0)
 
