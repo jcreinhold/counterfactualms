@@ -21,7 +21,7 @@ mpl.rcParams['figure.dpi'] = 300
 img_cm = 'Greys_r'
 diff_cm = 'seismic'
 
-from datasets.calabresi import CalabresiDataset
+from counterfactualms.datasets.calabresi import CalabresiDataset
 
 csv = "/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv"
 downsample = 2
@@ -29,8 +29,8 @@ crop_size = (224, 224)
 calabresi_test = CalabresiDataset(csv, crop_type='center', downsample=downsample, crop_size=crop_size)
 n_rot90 = 0
 
-from counterfactualms.experiments.medical import calabresi  # noqa: F401
-from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
+from counterfactualms.experiments import calabresi  # noqa: F401
+from counterfactualms.experiments.calabresi.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
 
 experiments = ['ConditionalVISEM']
 models = {}
