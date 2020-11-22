@@ -169,9 +169,9 @@ class ConditionalVISEM(BaseVISEM):
         with pyro.plate('observations', batch_size):
             hidden = self.encoder(obs['x'])
 
-            slice_ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['slice_ventricle_volume'])
-            slice_brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['slice_brain_volume'])
-            slice_lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['slice_lesion_volume'])
+            slice_ventricle_volume_ = self.slice_ventricle_volume_flow_constraint_transforms.inv(obs['slice_ventricle_volume'])
+            slice_brain_volume_ = self.slice_brain_volume_flow_constraint_transforms.inv(obs['slice_brain_volume'])
+            slice_lesion_volume_ = self.slice_lesion_volume_flow_constraint_transforms.inv(obs['slice_lesion_volume'])
 
             hidden = torch.cat([hidden, slice_ventricle_volume_, slice_brain_volume_, slice_lesion_volume_], 1)
             latent_dist = self.latent_encoder.predict(hidden)
