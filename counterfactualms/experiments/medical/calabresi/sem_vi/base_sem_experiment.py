@@ -145,45 +145,20 @@ class BaseVISEM(BaseSEM):
         self.latent_encoder = DeepIndepNormal(latent_layers, self.latent_dim, self.latent_dim)
 
         # priors
-        self.register_buffer('age_base_loc', torch.zeros([1, ], requires_grad=False))
-        self.register_buffer('age_base_scale', torch.ones([1, ], requires_grad=False))
-
         self.sex_logits = torch.nn.Parameter(torch.zeros([1, ]))
         self.slice_number_low = torch.nn.Parameter(torch.zeros([1, ]))
         self.slice_number_high = torch.nn.Parameter(torch.zeros([1, ]) + 241.)
 
-        self.register_buffer('ventricle_volume_base_loc', torch.zeros([1, ], requires_grad=False))
-        self.register_buffer('ventricle_volume_base_scale', torch.ones([1, ], requires_grad=False))
-
-        self.register_buffer('brain_volume_base_loc', torch.zeros([1, ], requires_grad=False))
-        self.register_buffer('brain_volume_base_scale', torch.ones([1, ], requires_grad=False))
-
-        self.register_buffer('duration_base_loc', torch.zeros([1, ], requires_grad=False))
-        self.register_buffer('duration_base_scale', torch.ones([1, ], requires_grad=False))
-
-        self.register_buffer('score_base_loc', torch.zeros([1, ], requires_grad=False))
-        self.register_buffer('score_base_scale', torch.ones([1, ], requires_grad=False))
+        for k in self.required_data - {'sex', 'slice_number'}:
+            self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
+            self.register_buffer(f'{k}_base_loc', torch.ones([1, ], requires_grad=False))
 
         self.register_buffer('z_loc', torch.zeros([latent_dim, ], requires_grad=False))
         self.register_buffer('z_scale', torch.ones([latent_dim, ], requires_grad=False))
 
-        self.register_buffer('x_base_loc', torch.zeros(self.img_shape, requires_grad=False))
-        self.register_buffer('x_base_scale', torch.ones(self.img_shape, requires_grad=False))
-
-        self.register_buffer('age_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('age_flow_lognorm_scale', torch.ones([], requires_grad=False))
-
-        self.register_buffer('ventricle_volume_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('ventricle_volume_flow_lognorm_scale', torch.ones([], requires_grad=False))
-
-        self.register_buffer('brain_volume_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('brain_volume_flow_lognorm_scale', torch.ones([], requires_grad=False))
-
-        self.register_buffer('duration_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('duration_flow_lognorm_scale', torch.ones([], requires_grad=False))
-
-        self.register_buffer('score_flow_lognorm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer('score_flow_lognorm_scale', torch.ones([], requires_grad=False))
+        for k in self.required_data - {'sex', 'slice_number'}:
+            self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
+            self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
         # age flow
         self.age_flow_components = ComposeTransformModule([Spline(1)])
@@ -198,6 +173,18 @@ class BaseVISEM(BaseSEM):
         self.brain_volume_flow_lognorm = AffineTransform(loc=self.brain_volume_flow_lognorm_loc.item(), scale=self.brain_volume_flow_lognorm_scale.item())
         self.brain_volume_flow_constraint_transforms = ComposeTransform([self.brain_volume_flow_lognorm, ExpTransform()])
 
+        self.lesion_volume_flow_lognorm = AffineTransform(loc=self.lesion_volume_flow_lognorm_loc.item(), scale=self.lesion_volume_flow_lognorm_scale.item())
+        self.lesion_volume_flow_constraint_transforms = ComposeTransform([self.lesion_volume_flow_lognorm, ExpTransform()])
+
+        self.total_ventricle_volume_flow_lognorm = AffineTransform(loc=self.total_ventricle_volume_flow_lognorm_loc.item(), scale=self.total_ventricle_volume_flow_lognorm_scale.item())  # noqa: E501
+        self.total_ventricle_volume_flow_constraint_transforms = ComposeTransform([self.total_ventricle_volume_flow_lognorm, ExpTransform()])
+
+        self.total_brain_volume_flow_lognorm = AffineTransform(loc=self.total_brain_volume_flow_lognorm_loc.item(), scale=self.total_brain_volume_flow_lognorm_scale.item())
+        self.total_brain_volume_flow_constraint_transforms = ComposeTransform([self.total_brain_volume_flow_lognorm, ExpTransform()])
+
+        self.total_lesion_volume_flow_lognorm = AffineTransform(loc=self.total_lesion_volume_flow_lognorm_loc.item(), scale=self.total_lesion_volume_flow_lognorm_scale.item())
+        self.total_lesion_volume_flow_constraint_transforms = ComposeTransform([self.total_lesion_volume_flow_lognorm, ExpTransform()])
+
         self.duration_flow_lognorm = AffineTransform(loc=self.duration_flow_lognorm_loc.item(), scale=self.duration_flow_lognorm_scale.item())
         self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_lognorm, ExpTransform()])
 
@@ -206,26 +193,12 @@ class BaseVISEM(BaseSEM):
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
-        if name == 'age_flow_lognorm_loc':
-            self.age_flow_lognorm.loc = self.age_flow_lognorm_loc.item()
-        elif name == 'age_flow_lognorm_scale':
-            self.age_flow_lognorm.scale = self.age_flow_lognorm_scale.item()
-        elif name == 'ventricle_volume_flow_lognorm_loc':
-            self.ventricle_volume_flow_lognorm.loc = self.ventricle_volume_flow_lognorm_loc.item()
-        elif name == 'ventricle_volume_flow_lognorm_scale':
-            self.ventricle_volume_flow_lognorm.scale = self.ventricle_volume_flow_lognorm_scale.item()
-        elif name == 'brain_volume_flow_lognorm_loc':
-            self.brain_volume_flow_lognorm.loc = self.brain_volume_flow_lognorm_loc.item()
-        elif name == 'brain_volume_flow_lognorm_scale':
-            self.brain_volume_flow_lognorm.scale = self.brain_volume_flow_lognorm_scale.item()
-        elif name == 'duration_flow_lognorm_loc':
-            self.duration_flow_lognorm.loc = self.duration_flow_lognorm_loc.item()
-        elif name == 'duration_flow_lognorm_scale':
-            self.duration_flow_lognorm.scale = self.duration_flow_lognorm_scale.item()
-        elif name == 'score_flow_lognorm_loc':
-            self.score_flow_lognorm.loc = self.score_flow_lognorm_loc.item()
-        elif name == 'score_flow_lognorm_scale':
-            self.score_flow_lognorm.scale = self.score_flow_lognorm_scale.item()
+        if 'flow_lognorm_loc' in name:
+            name_ = name.replace('flow_lognorm_loc', '')
+            getattr(self, name_ + 'flow_lognorm').loc = value.item()
+        elif 'flow_lognorm_scale' in name:
+            name_ = name.replace('flow_lognorm_scale', '')
+            getattr(self, name_ + 'flow_lognorm').scale = value.item()
 
     def _get_preprocess_transforms(self):
         return super()._get_preprocess_transforms().inv
@@ -249,33 +222,34 @@ class BaseVISEM(BaseSEM):
         return TransformedDistribution(x_base_dist, ComposeTransform([x_reparam_transform, preprocess_transform]))
 
     @pyro_method
-    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
+    def guide(self, obs):
         raise NotImplementedError()
 
     @pyro_method
-    def svi_guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
-        self.guide(x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number)
+    def svi_guide(self, obs):
+        self._check_observation(obs)
+        self.guide(obs)
 
     @pyro_method
-    def svi_model(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
-        with pyro.plate('observations', x.shape[0]):
-            pyro.condition(self.model,
-                data={'x': x, 'sex': sex, 'age': age,
-                      'ventricle_volume': ventricle_volume,
-                      'brain_volume': brain_volume,
-                      'duration': duration,
-                      'score': score,
-                      'slice_number': slice_number})()
+    def svi_model(self, obs):
+        self._check_observation(obs)
+        batch_size = obs['x'].shape[0]
+        with pyro.plate('observations', batch_size):
+            pyro.condition(self.model, data=obs)()
 
     @pyro_method
     def infer_z(self, *args, **kwargs):
         return self.guide(*args, **kwargs)
 
-    @staticmethod
-    def _check_observation(obs):
+    @property
+    def required_data(self):
+        return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
+                'total_ventricle_volume', 'total_brain_volume', 'total_lesion_volume',
+                'score', 'duration', 'slice_number'}
+
+    def _check_observation(self, obs):
         keys = obs.keys()
-        required_data =  {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'score', 'duration', 'slice_number'}
-        assert required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
+        assert self.required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
     @pyro_method
     def infer(self, **obs):
@@ -286,26 +260,16 @@ class BaseVISEM(BaseSEM):
         return exogeneous
 
     @pyro_method
-    def reconstruct(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number,
-                    num_particles:int=1):
-        obs = {'x': x, 'sex': sex, 'age': age,
-               'ventricle_volume': ventricle_volume, 'brain_volume': brain_volume,
-               'duration': duration, 'score': score, 'slice_number': slice_number}
+    def reconstruct(self, obs, num_particles:int=1):
+        self._check_observation(obs)
         z_dist = pyro.poutine.trace(self.guide).get_trace(**obs).nodes['z']['fn']
-
+        batch_size = obs['x'].shape[0]
         recons = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
+            obs = obs.update({'z': z})
             recon, *_ = pyro.poutine.condition(
-                self.sample, data={
-                    'sex': sex,
-                    'age': age,
-                    'ventricle_volume': ventricle_volume,
-                    'brain_volume': brain_volume,
-                    'duration': duration,
-                    'score': score,
-                    'slice_number': slice_number,
-                    'z': z})(x.shape[0])
+                self.sample, data=obs)(batch_size)
             recons += [recon]
         return torch.stack(recons).mean(0)
 
@@ -330,8 +294,13 @@ class BaseVISEM(BaseSEM):
             # sample_scm calls model hence the strings in the zip in the return statement
             counter = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogeneous), data=condition)(obs['x'].shape[0])
             counterfactuals += [counter]
-        return {k: v for k, v in zip(('x', 'z', 'age', 'sex', 'ventricle_volume', 'brain_volume', 'duration', 'score', 'slice_number'),
-                                     (torch.stack(c).mean(0) for c in zip(*counterfactuals)))}
+
+        out = {k: [] for k in self.required_data}
+        for c in counterfactuals:
+            for k in self.required_data:
+                out[k].append(c[k])
+        out = {k: torch.stack(v).mean() for k, v in out.items()}
+        return out
 
     @classmethod
     def add_arguments(cls, parser):
@@ -426,14 +395,8 @@ class SVIExperiment(BaseCovariateExperiment):
         metrics = {}
         model = self.svi.loss_class.trace_storage['model']
         guide = self.svi.loss_class.trace_storage['guide']
-        metrics['log p(x)'] = model.nodes['x']['log_prob'].mean()
-        metrics['log p(age)'] = model.nodes['age']['log_prob'].mean()
-        metrics['log p(sex)'] = model.nodes['sex']['log_prob'].mean()
-        metrics['log p(ventricle_volume)'] = model.nodes['ventricle_volume']['log_prob'].mean()
-        metrics['log p(brain_volume)'] = model.nodes['brain_volume']['log_prob'].mean()
-        metrics['log p(score)'] = model.nodes['score']['log_prob'].mean()
-        metrics['log p(duration)'] = model.nodes['duration']['log_prob'].mean()
-        metrics['log p(slice_number)'] = model.nodes['slice_number']['log_prob'].mean()
+        for k in self.required_data:
+            metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
         metrics['log p(z)'] = model.nodes['z']['log_prob'].mean()
         metrics['log q(z)'] = guide.nodes['z']['log_prob'].mean()
         metrics['log p(z) - log q(z)'] = metrics['log p(z)'] - metrics['log q(z)']
@@ -441,19 +404,14 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def prep_batch(self, batch):
         x = batch['image'] * 255.
-        age = batch['age'].unsqueeze(1).float()
-        sex = batch['sex'].unsqueeze(1).float()
-        ventricle_volume = batch['ventricle_volume'].unsqueeze(1).float()
-        brain_volume = batch['brain_volume'].unsqueeze(1).float()
-        score = batch['score'].unsqueeze(1).float()
-        duration = batch['duration'].unsqueeze(1).float()
-        slice_number = batch['slice_number'].unsqueeze(1).float()
         x = x.float()
         if self.training:
             x += torch.rand_like(x)
-        return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
-                'brain_volume': brain_volume, 'score': score, 'duration': duration,
-                'slice_number': slice_number}
+        out = dict(x=x)
+        for k in self.required_data:
+            if k in batch:
+                out[k] = batch[k].unsqueeze(1).float()
+        return out
 
     def training_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)

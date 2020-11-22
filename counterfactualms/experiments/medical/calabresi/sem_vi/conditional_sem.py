@@ -9,11 +9,32 @@ from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment i
 
 
 class ConditionalVISEM(BaseVISEM):
-    # number of context dimensions for decoder (5 b/c brain vol, ventricle vol, score, duration, slice number)
-    context_dim = 5
+    # number of context dimensions for decoder (5 b/c brain vol, ventricle vol, lesion vol, slice number)
+    context_dim = 4
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        # total_brain_volume flow
+        total_brain_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        self.total_brain_volume_flow_components = ConditionalAffineTransform(context_nn=total_brain_volume_net, event_dim=0)
+        self.total_brain_volume_flow_transforms = [
+            self.total_brain_volume_flow_components, self.total_brain_volume_flow_constraint_transforms
+        ]
+
+        # total_ventricle_volume flow
+        total_ventricle_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        self.total_ventricle_volume_flow_components = ConditionalAffineTransform(context_nn=total_ventricle_volume_net, event_dim=0)
+        self.total_ventricle_volume_flow_transforms = [
+            self.total_ventricle_volume_flow_components, self.total_ventricle_volume_flow_constraint_transforms
+        ]
+
+        # total_lesion_volume flow
+        total_lesion_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        self.total_lesion_volume_flow_components = ConditionalAffineTransform(context_nn=total_lesion_volume_net, event_dim=0)
+        self.total_lesion_volume_flow_transforms = [
+            self.total_lesion_volume_flow_components, self.total_lesion_volume_flow_constraint_transforms
+        ]
 
         # brain_volume flow
         brain_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
@@ -22,6 +43,19 @@ class ConditionalVISEM(BaseVISEM):
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
         ]
 
+        # ventricle_volume flow
+        ventricle_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        self.ventricle_volume_flow_components = ConditionalAffineTransform(context_nn=ventricle_volume_net, event_dim=0)
+        self.ventricle_volume_flow_transforms = [
+            self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
+        ]
+
+        # lesion_volume flow
+        lesion_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        self.lesion_volume_flow_components = ConditionalAffineTransform(context_nn=lesion_volume_net, event_dim=0)
+        self.lesion_volume_flow_transforms = [
+            self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
+        ]
         # duration flow
         duration_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.duration_flow_components = ConditionalAffineTransform(context_nn=duration_net, event_dim=0)
@@ -36,12 +70,6 @@ class ConditionalVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        # ventricle_volume flow
-        ventricle_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
-        self.ventricle_volume_flow_components = ConditionalAffineTransform(context_nn=ventricle_volume_net, event_dim=0)
-        self.ventricle_volume_flow_transforms = [
-            self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
-        ]
 
     @pyro_method
     def pgm_model(self):
@@ -61,18 +89,19 @@ class ConditionalVISEM(BaseVISEM):
         # pseudo call to register with pyro
         _ = self.age_flow_components
 
-        brain_context = torch.cat([sex, age_], 1)
-        brain_volume_base_dist = Normal(self.brain_volume_base_loc, self.brain_volume_base_scale).to_event(1)
-        brain_volume_dist = ConditionalTransformedDistribution(brain_volume_base_dist, self.brain_volume_flow_transforms).condition(brain_context)
-        brain_volume = pyro.sample('brain_volume', brain_volume_dist)
-        _ = self.brain_volume_flow_components
-        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
+        total_brain_context = torch.cat([sex, age_], 1)
+        total_brain_volume_base_dist = Normal(self.total_brain_volume_base_loc, self.total_brain_volume_base_scale).to_event(1)
+        total_brain_volume_dist = ConditionalTransformedDistribution(total_brain_volume_base_dist, self.total_brain_volume_flow_transforms).condition(total_brain_context)
+        total_brain_volume = pyro.sample('total_brain_volume', total_brain_volume_dist)
+        _ = self.total_brain_volume_flow_components
+        total_brain_volume_ = self.total_brain_volume_flow_constraint_transforms.inv(total_brain_volume)
 
-        ventricle_context = torch.cat([age_, brain_volume_], 1)
-        ventricle_volume_base_dist = Normal(self.ventricle_volume_base_loc, self.ventricle_volume_base_scale).to_event(1)
-        ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
-        ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
-        _ = self.ventricle_volume_flow_components
+        total_ventricle_context = torch.cat([age_, total_brain_volume_], 1)
+        total_ventricle_volume_base_dist = Normal(self.total_ventricle_volume_base_loc, self.total_ventricle_volume_base_scale).to_etotal_vent(1)
+        total_ventricle_volume_dist = ConditionalTransformedDistribution(total_ventricle_volume_base_dist, self.total_ventricle_volume_flow_transforms).condition(total_ventricle_context)  # noqa: E501
+        total_ventricle_volume = pyro.sample('total_ventricle_volume', total_ventricle_volume_dist)
+        _ = self.total_ventricle_volume_flow_components
+        total_ventricle_volume_ = self.total_ventricle_volume_flow_constraint_transforms.inv(total_ventricle_volume)
 
         duration_context = torch.cat([sex, age_], 1)
         duration_base_dist = Normal(self.duration_base_loc, self.duration_base_scale).to_event(1)
@@ -86,40 +115,69 @@ class ConditionalVISEM(BaseVISEM):
         score_dist = ConditionalTransformedDistribution(score_base_dist, self.score_flow_transforms).condition(score_context)  # noqa: E501
         score = pyro.sample('score', score_dist)
         _ = self.score_flow_components
+        score_ = pyro.sample('score', score_dist)
 
-        return age, sex, ventricle_volume, brain_volume, duration, score, slice_number
+        total_lesion_context = torch.cat([total_brain_volume_, duration_, score_], 1)
+        total_lesion_volume_base_dist = Normal(self.total_lesion_volume_base_loc, self.total_lesion_volume_base_scale).to_event(1)
+        total_lesion_volume_dist = ConditionalTransformedDistribution(total_lesion_volume_base_dist, self.total_lesion_volume_flow_transforms).condition(total_lesion_context)
+        total_lesion_volume = pyro.sample('total_lesion_volume', total_lesion_volume_dist)
+        _ = self.total_lesion_volume_flow_components
+        total_lesion_volume_ = self.total_lesion_volume_flow_constraint_transforms.inv(total_lesion_volume)
+
+        brain_context = torch.cat([total_brain_volume_, slice_number], 1)
+        brain_volume_base_dist = Normal(self.brain_volume_base_loc, self.brain_volume_base_scale).to_event(1)
+        brain_volume_dist = ConditionalTransformedDistribution(brain_volume_base_dist, self.brain_volume_flow_transforms).condition(brain_context)
+        brain_volume = pyro.sample('brain_volume', brain_volume_dist)
+        _ = self.brain_volume_flow_components
+        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
+
+        ventricle_context = torch.cat([brain_volume_, total_ventricle_volume_, slice_number], 1)
+        ventricle_volume_base_dist = Normal(self.ventricle_volume_base_loc, self.ventricle_volume_base_scale).to_event(1)
+        ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
+        ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
+        _ = self.ventricle_volume_flow_components
+
+        lesion_context = torch.cat([brain_volume_, total_lesion_volume_, slice_number], 1)
+        lesion_volume_base_dist = Normal(self.lesion_volume_base_loc, self.lesion_volume_base_scale).to_event(1)
+        lesion_volume_dist = ConditionalTransformedDistribution(lesion_volume_base_dist, self.lesion_volume_flow_transforms).condition(lesion_context)
+        lesion_volume = pyro.sample('lesion_volume', lesion_volume_dist)
+        _ = self.lesion_volume_flow_components
+
+        return dict(age=age, sex=sex, ventricle_volume=ventricle_volume, brain_volume=brain_volume,
+                    lesion_volume=lesion_volume, total_ventricle_volume=total_ventricle_volume,
+                    total_brain_volume=total_brain_volume, total_lesion_volume=total_lesion_volume,
+                    duration=duration, score=score, slice_number=slice_number)
 
     # no arguments because model is called with condition decorator
     @pyro_method
     def model(self):
-        age, sex, ventricle_volume, brain_volume, duration, score, slice_number = self.pgm_model()
+        obs = self.pgm_model()
 
-        ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
-        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
-        duration_ = self.duration_flow_constraint_transforms.inv(duration)
-        score_ = self.score_flow_constraint_transforms.inv(score)
+        ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
+        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
+        lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
         z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
 
-        latent = torch.cat([z, ventricle_volume_, brain_volume_, score_, duration_, slice_number], 1)
+        latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_, obs['slice_number']], 1)
 
         x_dist = self._get_transformed_x_dist(latent)
 
         x = pyro.sample('x', x_dist)
 
-        return x, z, age, sex, ventricle_volume, brain_volume, duration, score, slice_number
+        return obs.update(dict(x=x, z=z))
 
     @pyro_method
-    def guide(self, x, age, sex, ventricle_volume, brain_volume, duration, score, slice_number):
-        with pyro.plate('observations', x.shape[0]):
-            hidden = self.encoder(x)
+    def guide(self, obs):
+        batch_size = obs['x'].shape[0]
+        with pyro.plate('observations', batch_size):
+            hidden = self.encoder(obs['x'])
 
-            ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
-            brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
-            duration_ = self.duration_flow_constraint_transforms.inv(duration)
-            score_ = self.score_flow_constraint_transforms.inv(score)
+            ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
+            brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
+            lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
-            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, score_, duration_, slice_number], 1)
+            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_, obs['slice_number']], 1)
 
             latent_dist = self.latent_encoder.predict(hidden)
 
