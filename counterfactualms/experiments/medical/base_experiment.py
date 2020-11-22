@@ -174,8 +174,8 @@ class BaseCovariateExperiment(pl.LightningModule):
         slice_number = torch.from_numpy(self.calabresi_train.csv['slice_number'].to_numpy())
         self.pyro_model.slice_number_min = torch.tensor([slice_number.min() - 1e-5], device=self.torch_device, dtype=torch.float32)
         self.pyro_model.slice_number_max = torch.tensor([slice_number.max() + 1e-5], device=self.torch_device, dtype=torch.float32)
-        slice_min = self.pyro_model.slice_number_min.item()
-        slice_range = self.pyro_model.slice_number_max.item() - slice_min
+        slice_min = self.pyro_model.slice_number_min
+        slice_range = self.pyro_model.slice_number_max - slice_min
         self.pyro_model.slice_number_flow_norm_loc = slice_min.to(self.torch_device).float()
         self.pyro_model.slice_number_flow_norm_scale = slice_range.to(self.torch_device).float()
 
