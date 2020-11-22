@@ -171,6 +171,14 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.age_flow_lognorm_loc = age.log().mean().to(self.torch_device).float()
         self.pyro_model.age_flow_lognorm_scale = age.log().std().to(self.torch_device).float()
 
+        duration = torch.from_numpy(self.calabresi_train.csv['duration'].to_numpy())
+        self.pyro_model.duration_flow_lognorm_loc = duration.log().mean().to(self.torch_device).float()
+        self.pyro_model.duration_flow_lognorm_scale = duration.log().std().to(self.torch_device).float()
+
+        score = torch.from_numpy(self.calabresi_train.csv['score'].to_numpy())
+        self.pyro_model.score_flow_lognorm_loc = score.log().mean().to(self.torch_device).float()
+        self.pyro_model.score_flow_lognorm_scale = score.log().std().to(self.torch_device).float()
+
         ventricle_volume = torch.from_numpy(self.calabresi_train.csv['ventricle_volume'].to_numpy())
         self.pyro_model.ventricle_volume_flow_lognorm_loc = ventricle_volume.log().mean().to(self.torch_device).float()
         self.pyro_model.ventricle_volume_flow_lognorm_scale = ventricle_volume.log().std().to(self.torch_device).float()
@@ -179,13 +187,21 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.brain_volume_flow_lognorm_loc = brain_volume.log().mean().to(self.torch_device).float()
         self.pyro_model.brain_volume_flow_lognorm_scale = brain_volume.log().std().to(self.torch_device).float()
 
-        duration = torch.from_numpy(self.calabresi_train.csv['duration'].to_numpy())
-        self.pyro_model.duration_flow_lognorm_loc = duration.log().mean().to(self.torch_device).float()
-        self.pyro_model.duration_flow_lognorm_scale = duration.log().std().to(self.torch_device).float()
+        lesion_volume = torch.from_numpy(self.calabresi_train.csv['lesion_volume'].to_numpy())
+        self.pyro_model.lesion_volume_flow_lognorm_loc = lesion_volume.log().mean().to(self.torch_device).float()
+        self.pyro_model.lesion_volume_flow_lognorm_scale = lesion_volume.log().std().to(self.torch_device).float()
 
-        score = torch.from_numpy(self.calabresi_train.csv['score'].to_numpy())
-        self.pyro_model.score_flow_lognorm_loc = score.log().mean().to(self.torch_device).float()
-        self.pyro_model.score_flow_lognorm_scale = score.log().std().to(self.torch_device).float()
+        total_ventricle_volume = torch.from_numpy(self.calabresi_train.csv['total_ventricle_volume'].to_numpy())
+        self.pyro_model.total_ventricle_volume_flow_lognorm_loc = total_ventricle_volume.log().mean().to(self.torch_device).float()
+        self.pyro_model.total_ventricle_volume_flow_lognorm_scale = total_ventricle_volume.log().std().to(self.torch_device).float()
+
+        total_brain_volume = torch.from_numpy(self.calabresi_train.csv['total_brain_volume'].to_numpy())
+        self.pyro_model.total_brain_volume_flow_lognorm_loc = total_brain_volume.log().mean().to(self.torch_device).float()
+        self.pyro_model.total_brain_volume_flow_lognorm_scale = total_brain_volume.log().std().to(self.torch_device).float()
+
+        total_lesion_volume = torch.from_numpy(self.calabresi_train.csv['total_lesion_volume'].to_numpy())
+        self.pyro_model.total_lesion_volume_flow_lognorm_loc = total_lesion_volume.log().mean().to(self.torch_device).float()
+        self.pyro_model.total_lesion_volume_flow_lognorm_scale = total_lesion_volume.log().std().to(self.torch_device).float()
 
         if self.hparams.validate:
             logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')
