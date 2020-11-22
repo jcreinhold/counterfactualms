@@ -42,6 +42,9 @@ variables = (
     'brain_volume',
     'ventricle_volume',
     'lesion_volume',
+    'slice_brain_volume',
+    'slice_ventricle_volume',
+    'slice_lesion_volume',
     'duration',
     'score',
     'slice_number',
@@ -50,6 +53,9 @@ var_name = {
     'ventricle_volume': 'v',
     'brain_volume': 'b',
     'lesion_volume': 'l',
+    'slice_ventricle_volume': 'sv',
+    'slice_brain_volume': 'sb',
+    'slice_lesion_volume': 'sl',
     'sex': 's',
     'age': 'a',
     'score': 'e',
@@ -57,11 +63,14 @@ var_name = {
     'slice_number': 'n',
 }
 value_fmt = {
-    'score': lambda s: rf'{float(s):.3g}',
-    'duration': lambda s: rf'{float(s):.3g}\,\mathrm{{y}}',
-    'ventricle_volume': lambda s: rf'{float(s)/1000:.3g}\,\mathrm{{ml}}',
-    'brain_volume': lambda s: rf'{float(s)/1000:.3g}\,\mathrm{{ml}}',
-    'lesion_volume': lambda s: rf'{float(s)/1000:.3g}\,\mathrm{{ml}}',
+    'score': lambda s: rf'{np.round(s,2):.2g}',
+    'duration': lambda s: rf'{np.round(s,2):.2g}\,\mathrm{{y}}',
+    'ventricle_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
+    'brain_volume': lambda s: rf'{int(np.round(s/1000)):d}\,\mathrm{{ml}}',
+    'lesion_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
+    'slice_ventricle_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
+    'slice_brain_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
+    'slice_lesion_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
     'age': lambda s: rf'{int(s):d}\,\mathrm{{y}}',
     'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)]),
     'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
@@ -171,10 +180,12 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
             axi.yaxis.set_major_locator(plt.NullLocator())
 
     orig_data['type'] = ms_type
-    suptitle = r'$s={sex}; a={age}; b={brain_volume}; v={ventricle_volume}; l={lesion_volume} d={duration}; e={score}; n={slice_number}$'.format(
+    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$;\n'
+                '$sb={slice_brain_volume}$; $sv={slice_ventricle_volume}$; $sl={slice_lesion_volume}$; '
+                '$d={duration}$; $e={score}$; $n={slice_number}$').format(
         **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
-    fig.suptitle(suptitle, fontsize=14, y=1.02)
+    fig.suptitle(suptitle, fontsize=13)
     fig.tight_layout()
     plt.show()
 
@@ -204,7 +215,9 @@ def interactive_plot(model_name):
             axi.yaxis.set_major_locator(plt.NullLocator())
 
         orig_data['type'] = ms_type
-        att_str = '$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$l={lesion_volume}$\n$d={duration}$\n$e={score}$\n$t={type}$\n$n={slice_number}$'.format(
+        att_str = ('$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$l={lesion_volume}$\n'
+                   '$sb={slice_brain_volume}$\n$sv={slice_ventricle_volume}$\n$sl={slice_lesion_volume}$\n'
+                   '$d={duration}$\n$e={score}$\n$t={type}$\n$n={slice_number}$').format(
             **{att: value_fmt[att](orig_data[att].item()) for att in variables + ('type',)}
         )
 
@@ -216,19 +229,29 @@ def interactive_plot(model_name):
     from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
     from IPython.display import display
 
-    def plot(image, age, sex, brain_volume, ventricle_volume, lesion_volume, duration, score, slice_number,
-             do_age, do_sex, do_brain_volume, do_ventricle_volume, do_lesion_volume, do_duration, do_score, do_slice_number):
+    def plot(image, age, sex, brain_volume, ventricle_volume, lesion_volume,
+             slice_brain_volume, slice_ventricle_volume, slice_lesion_volume,
+             duration, score, slice_number,
+             do_age, do_sex, do_brain_volume, do_ventricle_volume, do_lesion_volume,
+             do_slice_brain_volume, do_slice_ventricle_volume, do_slice_lesion_volume,
+             do_duration, do_score, do_slice_number):
         intervention = {}
         if do_age:
             intervention['age'] = age
         if do_sex:
             intervention['sex'] = sex
         if do_brain_volume:
-            intervention['slice_brain_volume'] = brain_volume * 1000.
+            intervention['brain_volume'] = brain_volume * 1000.
         if do_ventricle_volume:
-            intervention['slice_ventricle_volume'] = ventricle_volume * 1000.
+            intervention['ventricle_volume'] = ventricle_volume * 1000.
         if do_lesion_volume:
-            intervention['slice_lesion_volume'] = lesion_volume * 1000.
+            intervention['lesion_volume'] = lesion_volume * 1000.
+        if do_slice_brain_volume:
+            intervention['slice_brain_volume'] = slice_brain_volume * 1000.
+        if do_slice_ventricle_volume:
+            intervention['slice_ventricle_volume'] = slice_ventricle_volume * 1000.
+        if do_slice_lesion_volume:
+            intervention['slice_lesion_volume'] = slice_lesion_volume * 1000.
         if do_duration:
             intervention['duration'] = duration
         if do_score:
@@ -238,22 +261,31 @@ def interactive_plot(model_name):
 
         plot_intervention(intervention, image)
 
+    slice_min = loaded_models[model_name].slice_number_min
+    slice_max = loaded_models[model_name].slice_number_max
+
     w = interactive(plot, image=IntSlider(min=0, max=len(calabresi_test)-1, description='Image #'),
-        age=FloatSlider(min=20., max=100., step=1., continuous_update=False, description='Age'),
+        age=FloatSlider(min=20., max=80., step=1., continuous_update=False, description='Age'),
         do_age=Checkbox(description='do(age)'),
         sex=Dropdown(options=[('female', 0.), ('male', 1.)], description='Sex'),
         do_sex=Checkbox(description='do(sex)'),
-        brain_volume=FloatSlider(min=6., max=18., step=0.5, continuous_update=False, description='Brain Volume (ml):', style={'description_width': 'initial'}),
+        brain_volume=FloatSlider(min=600., max=1800., step=0.5, continuous_update=False, description='Brain Volume (ml):', style={'description_width': 'initial'}),
         do_brain_volume=Checkbox(description='do(brain_volume)'),
-        ventricle_volume=FloatSlider(min=1e-5, max=2.5, step=0.1, continuous_update=False, description='Ventricle Volume (ml):', style={'description_width': 'initial'}),
+        ventricle_volume=FloatSlider(min=1e-5, max=88., step=0.1, continuous_update=False, description='Ventricle Volume (ml):', style={'description_width': 'initial'}),
         do_ventricle_volume=Checkbox(description='do(ventricle_volume)'),
-        lesion_volume=FloatSlider(min=1e-5, max=2.0, step=0.1, continuous_update=False, description='Lesion Volume (ml):', style={'description_width': 'initial'}),
+        lesion_volume=FloatSlider(min=1e-5, max=66., step=0.1, continuous_update=False, description='Lesion Volume (ml):', style={'description_width': 'initial'}),
         do_lesion_volume=Checkbox(description='do(lesion_volume)'),
+        slice_brain_volume=FloatSlider(min=6., max=18., step=0.5, continuous_update=False, description='Slice Brain Volume (ml):', style={'description_width': 'initial'}),
+        do_slice_brain_volume=Checkbox(description='do(slice_brain_volume)'),
+        slice_ventricle_volume=FloatSlider(min=1e-5, max=2.5, step=0.1, continuous_update=False, description='Slice Ventricle Volume (ml):', style={'description_width': 'initial'}),
+        do_slice_ventricle_volume=Checkbox(description='do(slice_ventricle_volume)'),
+        slice_lesion_volume=FloatSlider(min=1e-5, max=2.0, step=0.1, continuous_update=False, description='Slice Lesion Volume (ml):', style={'description_width': 'initial'}),
+        do_slice_lesion_volume=Checkbox(description='do(slice_lesion_volume)'),
         duration=FloatSlider(min=1e-5, max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
         do_duration=Checkbox(description='do(duration)'),
         score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
         do_score=Checkbox(description='do(score)'),
-        slice_number=FloatSlider(min=100., max=200., step=1., continuous_update=False, description='Slice #:', style={'description_width': 'initial'}),
+        slice_number=FloatSlider(min=slice_min, max=slice_max, step=1., continuous_update=False, description='Slice #:', style={'description_width': 'initial'}),
         do_slice_number=Checkbox(description='do(slice_number)'),
         )
 

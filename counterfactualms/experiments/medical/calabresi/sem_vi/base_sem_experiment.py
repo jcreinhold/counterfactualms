@@ -146,8 +146,8 @@ class BaseVISEM(BaseSEM):
 
         # priors
         self.sex_logits = torch.nn.Parameter(torch.zeros([1, ]))
-        self.slice_number_low = torch.nn.Parameter(torch.zeros([1, ]))
-        self.slice_number_high = torch.nn.Parameter(torch.zeros([1, ]) + 241.)
+        self.register_buffer('slice_number_min', torch.zeros([1, ], requires_grad=False))
+        self.register_buffer('slice_number_max', torch.zeros([1, ], requires_grad=False))
 
         for k in self.required_data - {'sex', 'slice_number', 'x'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))

@@ -171,6 +171,10 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.age_flow_lognorm_loc = age.log().mean().to(self.torch_device).float()
         self.pyro_model.age_flow_lognorm_scale = age.log().std().to(self.torch_device).float()
 
+        slice_number = torch.from_numpy(self.calabresi_train.csv['slice_number'].to_numpy())
+        self.pyro_model.slice_number_min = torch.tensor([slice_number.min() - 1e-5], device=self.torch_device, dtype=torch.float32)
+        self.pyro_model.slice_number_max = torch.tensor([slice_number.max() + 1e-5], device=self.torch_device, dtype=torch.float32)
+
         duration = torch.from_numpy(self.calabresi_train.csv['duration'].to_numpy())
         self.pyro_model.duration_flow_lognorm_loc = duration.log().mean().to(self.torch_device).float()
         self.pyro_model.duration_flow_lognorm_scale = duration.log().std().to(self.torch_device).float()
@@ -375,16 +379,16 @@ class BaseCovariateExperiment(pl.LightningModule):
             try:
                 if len(covariates) == 1:
                     (x_n, x), = tuple(covariates.items())
-                    sns.kdeplot(x=np_val(x), ax=ax[i], fill=True, thresh=0.01)
+                    sns.histplot(x=np_val(x), ax=ax[i])
                 elif len(covariates) == 2:
                     (x_n, x), (y_n, y) = tuple(covariates.items())
-                    sns.kdeplot(x=np_val(x), y=np_val(y), ax=ax[i], fill=True, thresh=0.01)
+                    sns.histplot(x=np_val(x), y=np_val(y), ax=ax[i])
                     ax[i].set_ylabel(y_n)
                 else:
                     raise ValueError(f'got too many values: {len(covariates)}')
-            except np.linalg.LinAlgError:
-                logging.info(f'got a linalg error when plotting {tag}/{name}')
-                raise
+            except Exception as e:
+                logging.info(e)
+                logging.info(f'Got the above error when plotting {tag}/{name}')
 
             ax[i].set_title(name)
             ax[i].set_xlabel(x_n)
@@ -414,30 +418,35 @@ class BaseCovariateExperiment(pl.LightningModule):
         keys = obs.keys()
         assert self.required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
 
-    def build_counterfactual(self, tag, obs, conditions, var_name=None):
+    def build_counterfactual(self, tag, obs, conditions, absolute=None, kde=False):
         self._check_observation(obs)
         imgs = [obs['x']]
-        if var_name is not None:
-            sampled_kdes = {'orig': {var_name: obs[var_name]}}
-        else:
-            sampled_kdes = {'orig': {'brain_volume': obs['brain_volume'],
-                                     'ventricle_volume': obs['ventricle_volume']}}
+        if kde:
+            if absolute == 'brain_volume':
+                sampled_kdes = {'orig': {'ventricle_volume': obs['ventricle_volume']}}
+            elif absolute == 'ventricle_volume':
+                sampled_kdes = {'orig': {'brain_volume': obs['brain_volume']}}
+            else:
+                sampled_kdes = {'orig': {'brain_volume': obs['brain_volume'],
+                                         'ventricle_volume': obs['ventricle_volume']}}
 
         for name, data in conditions.items():
             counterfactual = self.pyro_model._gen_counterfactual(obs=obs, condition=data)
 
-            counter = counterfactual['x']
-            sampled = counterfactual[var_name]
+            imgs.append(counterfactual['x'])
 
-            imgs.append(counter)
-            if var_name is not None:
-                sampled_kdes[name] = {var_name: sampled}
-            else:
-                sampled_kdes[name] = {'brain_volume': counter['brain_volume'],
-                                      'ventricle_volume': counter['ventricle_volume']}
+            if kde:
+                if absolute == 'brain_volume':
+                    sampled_kdes[name] = {'ventricle_volume': counterfactual['ventricle_volume']}
+                elif absolute == 'ventricle_volume':
+                    sampled_kdes[name] = {'brain_volume': counterfactual['brain_volume']}
+                else:
+                    sampled_kdes[name] = {'brain_volume': counterfactual['brain_volume'],
+                                          'ventricle_volume': counterfactual['ventricle_volume']}
 
         self.log_img_grid(tag, torch.cat(imgs, 0))
-        self.log_kdes(f'{tag}_sampled', sampled_kdes, save_img=True)
+        if kde:
+            self.log_kdes(f'{tag}_sampled', sampled_kdes, save_img=True)
 
     def sample_images(self):
         with torch.no_grad():
@@ -483,69 +492,69 @@ class BaseCovariateExperiment(pl.LightningModule):
                 '20': {'age': torch.zeros_like(obs_batch['age']) + 20},
                 '60': {'age': torch.zeros_like(obs_batch['age']) + 60},
             }
-            self.build_counterfactual('do(age=x)', obs=obs_batch, conditions=conditions)
+            self.build_counterfactual('do(age=x)', obs=obs_batch, conditions=conditions, kde=True)
 
             conditions = {
                 '0': {'sex': torch.zeros_like(obs_batch['sex'])},
                 '1': {'sex': torch.ones_like(obs_batch['sex'])},
             }
-            self.build_counterfactual('do(sex=x)', obs=obs_batch, conditions=conditions)
+            self.build_counterfactual('do(sex=x)', obs=obs_batch, conditions=conditions, kde=True)
 
             conditions = {
                 '1000000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 1000000},
                 '1600000': {'brain_volume': torch.zeros_like(obs_batch['brain_volume']) + 1800000}
             }
-            self.build_counterfactual('do(brain_volume=x)', obs=obs_batch, conditions=conditions, var_name='brain_volume')
+            self.build_counterfactual('do(brain_volume=x)', obs=obs_batch, conditions=conditions, absolute='brain_volume', kde=True)
 
             conditions = {
                 '15000':   {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 15000},
                 '50000': {'ventricle_volume': torch.zeros_like(obs_batch['ventricle_volume']) + 50000},
             }
-            self.build_counterfactual('do(ventricle_volume=x)', obs=obs_batch, conditions=conditions, var_name='ventricle_volume')
+            self.build_counterfactual('do(ventricle_volume=x)', obs=obs_batch, conditions=conditions, absolute='ventricle_volume', kde=True)
 
             conditions = {
                 '0':    {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 1e-5},
                 '60000': {'lesion_volume': torch.zeros_like(obs_batch['lesion_volume']) + 60000},
             }
-            self.build_counterfactual('do(lesion_volume=x)', obs=obs_batch, conditions=conditions, var_name='lesion_volume')
+            self.build_counterfactual('do(lesion_volume=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
                 '10000': {'slice_brain_volume': torch.zeros_like(obs_batch['slice_brain_volume']) + 10000},
                 '16000': {'slice_brain_volume': torch.zeros_like(obs_batch['slice_brain_volume']) + 16000}
             }
-            self.build_counterfactual('do(slice_brain_volume=x)', obs=obs_batch, conditions=conditions, var_name='slice_brain_volume')
+            self.build_counterfactual('do(slice_brain_volume=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
                 '10':   {'slice_ventricle_volume': torch.zeros_like(obs_batch['slice_ventricle_volume']) + 10},
                 '1000': {'slice_ventricle_volume': torch.zeros_like(obs_batch['slice_ventricle_volume']) + 1000},
                 '2000': {'slice_ventricle_volume': torch.zeros_like(obs_batch['slice_ventricle_volume']) + 2000},
             }
-            self.build_counterfactual('do(slice_ventricle_volume=x)', obs=obs_batch, conditions=conditions, var_name='slice_ventricle_volume')
+            self.build_counterfactual('do(slice_ventricle_volume=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
                 '0':    {'slice_lesion_volume': torch.zeros_like(obs_batch['slice_lesion_volume']) + 1e-5},
                 '500':  {'slice_lesion_volume': torch.zeros_like(obs_batch['slice_lesion_volume']) + 500},
                 '1000': {'slice_lesion_volume': torch.zeros_like(obs_batch['slice_lesion_volume']) + 1000},
             }
-            self.build_counterfactual('do(slice_lesion_volume=x)', obs=obs_batch, conditions=conditions, var_name='slice_lesion_volume')
+            self.build_counterfactual('do(slice_lesion_volume=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
                 '1': {'score': torch.zeros_like(obs_batch['score']) + 1.},
                 '5': {'score': torch.zeros_like(obs_batch['score']) + 5.}
             }
-            self.build_counterfactual('do(score=x)', obs=obs_batch, conditions=conditions, var_name='score')
+            self.build_counterfactual('do(score=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
                 '0': {'duration': torch.zeros_like(obs_batch['duration']) + 1e-5},
                 '10': {'duration': torch.zeros_like(obs_batch['duration']) + 10.},
             }
-            self.build_counterfactual('do(duration=x)', obs=obs_batch, conditions=conditions, var_name='duration')
+            self.build_counterfactual('do(duration=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
                 '115': {'slice_number': torch.zeros_like(obs_batch['slice_number']) + 115},
                 '125': {'slice_number': torch.zeros_like(obs_batch['slice_number']) + 125.}
             }
-            self.build_counterfactual('do(slice_number=x)', obs=obs_batch, conditions=conditions, var_name='slice_number')
+            self.build_counterfactual('do(slice_number=x)', obs=obs_batch, conditions=conditions)
 
     @classmethod
     def add_arguments(cls, parser):
