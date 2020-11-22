@@ -21,7 +21,7 @@ mpl.rcParams['figure.dpi'] = 300
 img_cm = 'Greys_r'
 diff_cm = 'seismic'
 
-from counterfactualms.datasets.medical.calabresi import CalabresiDataset
+from datasets.calabresi import CalabresiDataset
 
 csv = "/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv"
 downsample = 2

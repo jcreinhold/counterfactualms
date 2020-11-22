@@ -22,7 +22,7 @@ from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
 from counterfactualms.distributions.deep import (
     DeepMultivariateNormal, DeepIndepNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
 )
-from counterfactualms.experiments.medical.base_experiment import (
+from counterfactualms.experiments.calabresi.base_experiment import (
     BaseCovariateExperiment, BaseSEM, EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
 )
 

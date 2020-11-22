@@ -17,7 +17,7 @@ from pyro.infer.reparam.transform import TransformReparam
 from torch.distributions import Independent
 from pyro.distributions.transforms import ComposeTransform, SigmoidTransform, AffineTransform
 
-from counterfactualms.datasets.medical.calabresi import CalabresiDataset
+from counterfactualms.datasets.calabresi import CalabresiDataset
 
 logger = logging.getLogger(__name__)
 

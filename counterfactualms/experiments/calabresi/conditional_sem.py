@@ -5,7 +5,7 @@ from pyro.distributions.conditional import ConditionalTransformedDistribution
 import torch
 
 from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
-from counterfactualms.experiments.medical.calabresi.sem_vi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
+from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
 
 class ConditionalVISEM(BaseVISEM):
