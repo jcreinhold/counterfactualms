@@ -243,11 +243,11 @@ def interactive_plot(model_name):
         do_age=Checkbox(description='do(age)'),
         sex=Dropdown(options=[('female', 0.), ('male', 1.)], description='Sex'),
         do_sex=Checkbox(description='do(sex)'),
-        brain_volume=FloatSlider(min=8., max=16., step=1., continuous_update=False, description='Brain Volume (ml):', style={'description_width': 'initial'}),
+        brain_volume=FloatSlider(min=6., max=18., step=0.5, continuous_update=False, description='Brain Volume (ml):', style={'description_width': 'initial'}),
         do_brain_volume=Checkbox(description='do(brain_volume)'),
-        ventricle_volume=FloatSlider(min=1e-5, max=2.5, step=0.5, continuous_update=False, description='Ventricle Volume (ml):', style={'description_width': 'initial'}),
+        ventricle_volume=FloatSlider(min=1e-5, max=2.5, step=0.1, continuous_update=False, description='Ventricle Volume (ml):', style={'description_width': 'initial'}),
         do_ventricle_volume=Checkbox(description='do(ventricle_volume)'),
-        lesion_volume=FloatSlider(min=1e-5, max=2.0, step=0.25, continuous_update=False, description='Lesion Volume (ml):', style={'description_width': 'initial'}),
+        lesion_volume=FloatSlider(min=1e-5, max=2.0, step=0.1, continuous_update=False, description='Lesion Volume (ml):', style={'description_width': 'initial'}),
         do_lesion_volume=Checkbox(description='do(lesion_volume)'),
         duration=FloatSlider(min=1e-5, max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
         do_duration=Checkbox(description='do(duration)'),
@@ -261,4 +261,3 @@ def interactive_plot(model_name):
     ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+n]]) for i in range(1,n+1)]), w.children[-1]])
     display(ui)
     w.update()
-

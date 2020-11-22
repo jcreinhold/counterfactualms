@@ -158,11 +158,9 @@ class ConditionalVISEM(BaseVISEM):
         lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
         z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
-
         latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_, obs['slice_number']], 1)
 
         x_dist = self._get_transformed_x_dist(latent)
-
         x = pyro.sample('x', x_dist)
 
         obs.update(dict(x=x, z=z))
@@ -179,9 +177,7 @@ class ConditionalVISEM(BaseVISEM):
             lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
             hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_, obs['slice_number']], 1)
-
             latent_dist = self.latent_encoder.predict(hidden)
-
             z = pyro.sample('z', latent_dist)
 
         return z
