@@ -37,14 +37,14 @@ class ConditionalVISEM(BaseVISEM):
         ]
 
         # duration flow
-        duration_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        duration_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.25))
         self.duration_flow_components = ConditionalAffineTransform(context_nn=duration_net, event_dim=0)
         self.duration_flow_transforms = [
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
         # score flow
-        score_net = DenseNN(1, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        score_net = DenseNN(1, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.25))
         self.score_flow_components = ConditionalAffineTransform(context_nn=score_net, event_dim=0)
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
@@ -104,12 +104,12 @@ class ConditionalVISEM(BaseVISEM):
     def model(self):
         obs = self.pgm_model()
 
-        ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
-        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
-        lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
+        ventricle_volume = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
+        brain_volume = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
+        lesion_volume = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
         z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
-        latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
+        latent = torch.cat([z, ventricle_volume, brain_volume, lesion_volume], 1)
 
         x_dist = self._get_transformed_x_dist(latent)
         x = pyro.sample('x', x_dist)
@@ -123,11 +123,11 @@ class ConditionalVISEM(BaseVISEM):
         with pyro.plate('observations', batch_size):
             hidden = self.encoder(obs['x'])
 
-            ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
-            brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
-            lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
+            ventricle_volume = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
+            brain_volume = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
+            lesion_volume = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
-            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
+            hidden = torch.cat([hidden, ventricle_volume, brain_volume, lesion_volume], 1)
             latent_dist = self.latent_encoder.predict(hidden)
             z = pyro.sample('z', latent_dist)
 

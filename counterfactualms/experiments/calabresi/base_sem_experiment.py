@@ -246,14 +246,15 @@ class BaseVISEM(BaseSEM):
 
     def _check_observation(self, obs):
         keys = obs.keys()
-        assert self.required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
+        assert self.required_data == set(keys), f'Incompatible observation: {tuple(keys)}'
 
     @pyro_method
     def infer(self, obs):
         self._check_observation(obs)
-        z = self.infer_z(obs)
-        obs.update(dict(z=z))
-        exogeneous = self.infer_exogeneous(obs)
+        obs_ = obs.copy()
+        z = self.infer_z(obs_)
+        obs_.update(dict(z=z))
+        exogeneous = self.infer_exogeneous(obs_)
         exogeneous['z'] = z
         return exogeneous
 
@@ -273,23 +274,23 @@ class BaseVISEM(BaseSEM):
         return torch.stack(recons).mean(0)
 
     @pyro_method
-    def counterfactual(self, obs:Mapping, condition:Mapping=None, num_particles:int=1):
+    def counterfactual(self, obs, condition:Mapping=None, num_particles:int=1):
         self._check_observation(obs)
-        z_dist = pyro.poutine.trace(self.guide).get_trace(obs).nodes['z']['fn']
+        obs_ = obs.copy()
+        z_dist = pyro.poutine.trace(self.guide).get_trace(obs_).nodes['z']['fn']
+        n = obs_['x'].shape[0]
 
         counterfactuals = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
-            obs.update(dict(z=z))
-            exogeneous = self.infer_exogeneous(obs)
+            obs_.update(dict(z=z))
+            exogeneous = self.infer_exogeneous(obs_)
             exogeneous['z'] = z
             # condition on these vars if they aren't included in 'do' as they are root nodes
             # and we don't have the exogeneous noise for them yet
             if 'sex' not in condition.keys():
-                exogeneous['sex'] = obs['sex']
+                exogeneous['sex'] = obs_['sex']
 
-            # sample_scm calls model hence the strings in the zip in the return statement
-            n = obs['x'].shape[0]
             counter = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogeneous), data=condition)(n)
             counterfactuals += [counter]
 

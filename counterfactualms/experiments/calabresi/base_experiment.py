@@ -242,7 +242,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         samples = outputs.pop('samples')
 
         sample_trace = pyro.poutine.trace(self.pyro_model.sample).get_trace(self.hparams.test_batch_size)
-        samples['unconditional_samples'] = {k: sample_trace.nodes['x']['value'].cpu() for k in self.required_data}
+        samples['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
 
         cond_data = {
             'brain_volume': self.brain_volume_range.repeat(self.hparams.test_batch_size, 1),
@@ -251,7 +251,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             'z': torch.randn([self.hparams.test_batch_size, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat_interleave(9, 0)
         }
         sample_trace = pyro.poutine.trace(pyro.condition(self.pyro_model.sample, data=cond_data)).get_trace(9 * self.hparams.test_batch_size)
-        samples['conditional_samples'] = {k: sample_trace.nodes['x']['value'].cpu() for k in self.required_data}
+        samples['conditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
 
         logger.info(f'Got samples: {tuple(samples.keys())}')
         metrics = {('test/' + k): v for k, v in outputs.items()}
@@ -394,7 +394,7 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def _check_observation(self, obs):
         keys = obs.keys()
-        assert self.required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
+        assert self.required_data == set(keys), f'Incompatible observation: {tuple(keys)}'
 
     def build_counterfactual(self, tag, obs, conditions, absolute=None, kde=False):
         self._check_observation(obs)
@@ -459,6 +459,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             for (tag, val) in exogeneous.items():
                 self.logger.experiment.add_histogram(tag, val, self.current_epoch)
 
+            s = obs_batch['x'].shape[0] // 8
             obs_batch = {k: v[::s] for k, v in obs_batch.items()}
 
             self.log_img_grid('input', obs_batch['x'], save_img=True)
