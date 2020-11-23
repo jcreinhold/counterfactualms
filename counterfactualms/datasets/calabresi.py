@@ -29,12 +29,12 @@ class CalabresiDataset(Dataset):
         csv['score'] = (csv['edss'] + csv['msss'] + csv['fss']) / n_exist
         csv['sex'] = csv['sex'].map({'M': 0., 'F': 1.})
         csv['type'] = csv['type'].map({'HC': 0., 'RRMS': 1., 'SPMS': 1., 'PPMS': 1.})
+        csv['slice_ventricle_volume'] = csv['slice_ventricle_volume'].astype(np.float32) + eps
         csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32) + eps
-        csv['total_ventricle_volume'] = csv['total_ventricle_volume'].astype(np.float32) + eps
+        csv['slice_brain_volume'] = csv['slice_brain_volume'].astype(np.float32) + eps
         csv['brain_volume'] = csv['brain_volume'].astype(np.float32) + eps
-        csv['total_brain_volume'] = csv['total_brain_volume'].astype(np.float32) + eps
+        csv['slice_lesion_volume'] = csv['slice_lesion_volume'].astype(np.float32).fillna(0.) + eps
         csv['lesion_volume'] = csv['lesion_volume'].astype(np.float32).fillna(0.) + eps
-        csv['total_lesion_volume'] = csv['total_lesion_volume'].astype(np.float32).fillna(0.) + eps
         csv['slice_number'] = csv['slice_number'].astype(np.float32)
         if csv.isnull().values.any():
             raise ValueError(
@@ -82,12 +82,12 @@ class CalabresiDataset(Dataset):
         item['type'] = torch.as_tensor(item['type'], dtype=torch.float32)
         item['relapse'] = torch.as_tensor(item['relapse'], dtype=torch.float32)
         item['duration'] = torch.as_tensor(item['duration'], dtype=torch.float32)
+        item['slice_brain_volume'] = torch.as_tensor(item['slice_brain_volume'], dtype=torch.float32)
+        item['slice_ventricle_volume'] = torch.as_tensor(item['slice_ventricle_volume'], dtype=torch.float32)
+        item['slice_lesion_volume'] = torch.as_tensor(item['slice_lesion_volume'], dtype=torch.float32)
         item['brain_volume'] = torch.as_tensor(item['brain_volume'], dtype=torch.float32)
         item['ventricle_volume'] = torch.as_tensor(item['ventricle_volume'], dtype=torch.float32)
         item['lesion_volume'] = torch.as_tensor(item['lesion_volume'], dtype=torch.float32)
-        item['total_brain_volume'] = torch.as_tensor(item['total_brain_volume'], dtype=torch.float32)
-        item['total_ventricle_volume'] = torch.as_tensor(item['total_ventricle_volume'], dtype=torch.float32)
-        item['total_lesion_volume'] = torch.as_tensor(item['total_lesion_volume'], dtype=torch.float32)
         item['score'] = torch.as_tensor(item['score'], dtype=torch.float32)
         item['slice_number'] = torch.as_tensor(item['slice_number'], dtype=torch.float32)
         return item

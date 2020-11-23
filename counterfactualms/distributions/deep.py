@@ -28,7 +28,7 @@ class _DeepIndepNormal(DeepConditional):
 
     def predict(self, x) -> Independent:
         mean, logvar = self(x)
-        std = (.5 * logvar).exp()
+        std = (.5 * logvar).exp() + 1e-5
         event_ndim = len(mean.shape[1:])  # keep only batch dimension
         return Normal(mean, std).to_event(event_ndim)
 

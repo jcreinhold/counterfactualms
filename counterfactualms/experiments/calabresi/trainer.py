@@ -9,8 +9,8 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import TensorBoardLogger
 import torch
 
-from counterfactualms.experiments.medical import calabresi  # noqa: F401
-from counterfactualms.experiments.medical.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
+from counterfactualms.experiments import calabresi # noqa: F401
+from counterfactualms.experiments.calabresi.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY
 
 logger = logging.getLogger(__name__)
 
