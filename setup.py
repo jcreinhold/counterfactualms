@@ -3,8 +3,8 @@
 
 from setuptools import setup, find_packages
 
-console_scripts = ['counterfactualms-train=counterfactualms.experiments.medical.trainer:main',
-                   'counterfactualms-test=counterfactualms.experiments.medical.tester:main']
+console_scripts = ['counterfactualms-train=counterfactualms.experiments.calabresi.trainer:main',
+                   'counterfactualms-test=counterfactualms.experiments.calabresi.tester:main']
 
 with open('README.md', encoding="utf-8") as f:
     readme = f.read()

@@ -23,10 +23,9 @@ diff_cm = 'seismic'
 
 from counterfactualms.datasets.calabresi import CalabresiDataset
 
-csv = "/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv"
 downsample = 2
 crop_size = (224, 224)
-calabresi_test = CalabresiDataset(csv, crop_type='center', downsample=downsample, crop_size=crop_size)
+calabresi_test = None
 n_rot90 = 0
 
 from counterfactualms.experiments import calabresi  # noqa: F401
@@ -65,7 +64,7 @@ value_fmt = {
     'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
 }
 
-def setup(model_paths):
+def setup(model_paths, csv_path):
     """ run this first with paths to models corresponding to experiments """
     if isinstance(model_paths, str):
         model_paths = [model_paths]
@@ -94,6 +93,8 @@ def setup(model_paths):
             loaded_model.eval()
             global loaded_models
             loaded_models[exp] = loaded_model
+            global calabresi_test
+            calabresi_test = CalabresiDataset(csv_path, crop_type='center', downsample=downsample, crop_size=crop_size)
             def sample_pgm(num_samples, model):
                 with pyro.plate('observations', num_samples):
                     return model.pgm_model()
