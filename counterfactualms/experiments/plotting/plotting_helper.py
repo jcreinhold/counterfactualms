@@ -24,8 +24,8 @@ diff_cm = 'seismic'
 
 from counterfactualms.datasets.calabresi import CalabresiDataset
 
-downsample = 2
-crop_size = (224, 224)
+downsample = None
+crop_size = None
 calabresi_test = None
 n_rot90 = 0
 
@@ -76,7 +76,7 @@ save_fmt = {
 }
 
 
-def setup(model_paths, csv_path):
+def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2):
     """ run this first with paths to models corresponding to experiments """
     if isinstance(model_paths, str):
         model_paths = [model_paths]
@@ -105,6 +105,10 @@ def setup(model_paths, csv_path):
             loaded_model.eval()
             global loaded_models
             loaded_models[exp] = loaded_model
+            global crop_size
+            crop_size = exp_crop_size
+            global downsample
+            downsample = exp_downsample
             global calabresi_test
             calabresi_test = CalabresiDataset(csv_path, crop_type='center', downsample=downsample, crop_size=crop_size)
             def sample_pgm(num_samples, model):
