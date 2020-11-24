@@ -19,7 +19,7 @@ torch.autograd.set_grad_enabled(False)
 
 mpl.rcParams['figure.dpi'] = 300
 
-img_cm = 'Greys_r'
+img_cm = 'gray'
 diff_cm = 'seismic'
 
 from counterfactualms.datasets.calabresi import CalabresiDataset
@@ -64,6 +64,17 @@ value_fmt = {
     'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)]),
     'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
 }
+save_fmt = {
+    'score': lambda s: f'{np.round(s,2):.2g}',
+    'duration': lambda s: f'{np.round(s,2):.2g}',
+    'ventricle_volume': lambda s: f'{np.round(s/1000,2):.2g}',
+    'brain_volume': lambda s: f'{int(np.round(s/1000)):d}',
+    'lesion_volume': lambda s: f'{np.round(s/1000,2):.2g}',
+    'age': lambda s: f'{int(s):d}',
+    'sex': lambda s: '{}'.format(['F', 'M'][int(s)]),
+    'type': lambda s: '{}'.format(['HC', 'MS'][int(s)]),
+}
+
 
 def setup(model_paths, csv_path):
     """ run this first with paths to models corresponding to experiments """
@@ -112,6 +123,15 @@ def fmt_intervention(intervention):
         return f"$do({var_name[var]}={value_fmt[var](value)})$"
     else:
         all_interventions = ',\n'.join([f'${var_name[k]}={value_fmt[k](v)}$' for k, v in intervention.items()])
+        return f"do({all_interventions})"
+
+
+def fmt_save(intervention):
+    if isinstance(intervention, str):
+        var, value = intervention[3:-1].split('=')
+        return f"do({var_name[var]}={save_fmt[var](value)})"
+    else:
+        all_interventions = ','.join([f'{var_name[k]}={save_fmt[k](v)}' for k, v in intervention.items()])
         return f"do({all_interventions})"
 
 
@@ -171,7 +191,18 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
 
 
 def interactive_plot(model_name):
-    def plot_intervention(intervention, idx, num_samples=32, save_image_path=None):
+    def _to_png(x):
+        if hasattr(x, 'numpy'):
+            x = x.numpy()
+        x = np.rot90(x.squeeze(), n_rot90)
+        x = np.clip(x, 0., 255.)
+        x = x.astype(np.uint8)
+        x = Image.fromarray(x)
+        sz = [downsample*s for s in x.size]
+        x = x.resize(sz, resample=Image.BILINEAR)
+        return x
+
+    def plot_intervention(intervention, idx, num_samples=32, save_image_dir='', save=False):
         fig, ax = plt.subplots(1, 4, figsize=(10, 2.5), gridspec_kw=dict(wspace=0, hspace=0))
         orig_data = prep_data(calabresi_test[idx])
         ms_type = orig_data['type']
@@ -205,18 +236,26 @@ def interactive_plot(model_name):
                       verticalalignment='center', transform=ax[0].transAxes,
                       fontsize=mpl.rcParams['axes.titlesize'])
         fig.tight_layout()
+        if save_image_dir and save:
+            x = _to_png(x)
+            x_test = _to_png(x_test)
+            intervention_str = fmt_save(intervention)
+            x.save(os.path.join(save_image_dir, intervention_str+'_cf.png'))
+            x_test.save(os.path.join(save_image_dir, intervention_str+'_orig.png'))
+            plt.savefig(intervention_str+'_full.pdf');
         plt.show()
-        if save_image_path is not None:
-            Image.fromarray(np.rot90(x.squeeze(), n_rot90)).save(save_image_path)
 
-    from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown, Text
+    from ipywidgets import (
+        interactive, IntSlider, FloatSlider, HBox, VBox,
+        Checkbox, Dropdown, Text, Button, BoundedIntText
+    )
     from IPython.display import display
 
     def plot(image, age, sex, brain_volume, ventricle_volume, lesion_volume,
              duration, score,
              do_age, do_sex, do_brain_volume, do_ventricle_volume, do_lesion_volume,
              do_duration, do_score,
-             save_image_path):
+             save_image_dir, save):
         intervention = {}
         if do_age:
             intervention['age'] = age
@@ -233,9 +272,9 @@ def interactive_plot(model_name):
         if do_score:
             intervention['score'] = score
 
-        plot_intervention(intervention, image, save_image_path=save_image_path)
+        plot_intervention(intervention, image, save_image_dir=save_image_dir, save=save)
 
-    w = interactive(plot, image=IntSlider(min=0, max=len(calabresi_test)-1, description='Image #'),
+    w = interactive(plot, image=BoundedIntText(min=0, max=len(calabresi_test)-1, description='Image #'),
         age=FloatSlider(min=20., max=80., step=1., continuous_update=False, description='Age'),
         do_age=Checkbox(description='do(age)'),
         sex=Dropdown(options=[('female', 0.), ('male', 1.)], description='Sex'),
@@ -250,11 +289,12 @@ def interactive_plot(model_name):
         do_duration=Checkbox(description='do(duration)'),
         score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
         do_score=Checkbox(description='do(score)'),
-        save_image_path=Text(value='', placeholder='Full path', description='Save Image Path:', style={'description_width': 'initial'})
+        save_image_dir=Text(value='', placeholder='Full path', description='Save Image Directory:', style={'description_width': 'initial'}),
+        save=Checkbox(description='Save')
         )
 
     n = len(variables)
-    ui = VBox([HBox([w.children[0], w.children[-2]]),  # image # and save_image_path
+    ui = VBox([HBox([w.children[0], w.children[-3], w.children[-2]]),  # image # and save_image_dir
                VBox([HBox([w.children[i], w.children[i+n]]) for i in range(1,n+1)]), # vars and intervention checkboxes
                w.children[-1]])  # show image
     display(ui)
