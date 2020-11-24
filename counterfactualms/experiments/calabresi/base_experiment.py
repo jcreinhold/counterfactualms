@@ -435,7 +435,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_ventricle_volume = sample_trace.nodes['ventricle_volume']['value']
 
             s = samples.shape[0] // 8
-            self.log_img_grid('samples', samples.data[::s])
+            m = 8 * s
+            self.log_img_grid('samples', samples.data[:m:s])
 
             cond_data = {'brain_volume': self.brain_volume_range,
                          'ventricle_volume': self.ventricle_volume_range,
@@ -460,7 +461,8 @@ class BaseCovariateExperiment(pl.LightningModule):
                 self.logger.experiment.add_histogram(tag, val, self.current_epoch)
 
             s = obs_batch['x'].shape[0] // 8
-            obs_batch = {k: v[::s] for k, v in obs_batch.items()}
+            m = 8 * s
+            obs_batch = {k: v[:m:s] for k, v in obs_batch.items()}
 
             self.log_img_grid('input', obs_batch['x'], save_img=True)
 
