@@ -30,7 +30,7 @@ class ConditionalVISEM(BaseVISEM):
         ]
 
         # lesion_volume flow
-        lesion_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        lesion_volume_net = DenseNN(4, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.lesion_volume_flow_components = ConditionalAffineTransform(context_nn=lesion_volume_net, event_dim=0)
         self.lesion_volume_flow_transforms = [
             self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
@@ -75,6 +75,7 @@ class ConditionalVISEM(BaseVISEM):
         ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
         ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
         _ = self.ventricle_volume_flow_components
+        ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
 
         duration_context = torch.cat([sex, age_], 1)
         duration_base_dist = Normal(self.duration_base_loc, self.duration_base_scale).to_event(1)
@@ -90,7 +91,7 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.score_flow_components
         score_ = self.score_flow_constraint_transforms.inv(score)
 
-        lesion_context = torch.cat([brain_volume_, duration_, score_], 1)
+        lesion_context = torch.cat([brain_volume_, ventricle_volume_, duration_, score_], 1)
         lesion_volume_base_dist = Normal(self.lesion_volume_base_loc, self.lesion_volume_base_scale).to_event(1)
         lesion_volume_dist = ConditionalTransformedDistribution(lesion_volume_base_dist, self.lesion_volume_flow_transforms).condition(lesion_context)
         lesion_volume = pyro.sample('lesion_volume', lesion_volume_dist)
