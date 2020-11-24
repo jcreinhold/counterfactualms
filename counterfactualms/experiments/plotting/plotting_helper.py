@@ -10,6 +10,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+from PIL import Image
 import pyro
 import torch
 
@@ -170,7 +171,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
 
 
 def interactive_plot(model_name):
-    def plot_intervention(intervention, idx, num_samples=32):
+    def plot_intervention(intervention, idx, num_samples=32, save_image_path=None):
         fig, ax = plt.subplots(1, 4, figsize=(10, 2.5), gridspec_kw=dict(wspace=0, hspace=0))
         orig_data = prep_data(calabresi_test[idx])
         ms_type = orig_data['type']
@@ -205,14 +206,17 @@ def interactive_plot(model_name):
                       fontsize=mpl.rcParams['axes.titlesize'])
         fig.tight_layout()
         plt.show()
+        if save_image_path is not None:
+            Image.fromarray(np.rot90(x.squeeze(), n_rot90)).save(save_image_path)
 
-    from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
+    from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown, Text
     from IPython.display import display
 
     def plot(image, age, sex, brain_volume, ventricle_volume, lesion_volume,
              duration, score,
              do_age, do_sex, do_brain_volume, do_ventricle_volume, do_lesion_volume,
-             do_duration, do_score):
+             do_duration, do_score,
+             save_image_path):
         intervention = {}
         if do_age:
             intervention['age'] = age
@@ -229,7 +233,7 @@ def interactive_plot(model_name):
         if do_score:
             intervention['score'] = score
 
-        plot_intervention(intervention, image)
+        plot_intervention(intervention, image, save_image_path=save_image_path)
 
     w = interactive(plot, image=IntSlider(min=0, max=len(calabresi_test)-1, description='Image #'),
         age=FloatSlider(min=20., max=80., step=1., continuous_update=False, description='Age'),
@@ -246,9 +250,12 @@ def interactive_plot(model_name):
         do_duration=Checkbox(description='do(duration)'),
         score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
         do_score=Checkbox(description='do(score)'),
+        save_image_path=Text(value='', placeholder='Full path', description='Save Image Path:', style={'description_width': 'initial'})
         )
 
     n = len(variables)
-    ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+n]]) for i in range(1,n+1)]), w.children[-1]])
+    ui = VBox([HBox([w.children[0], w.children[-2]]),  # image # and save_image_path
+               VBox([HBox([w.children[i], w.children[i+n]]) for i in range(1,n+1)]), # vars and intervention checkboxes
+               w.children[-1]])  # show image
     display(ui)
     w.update()
