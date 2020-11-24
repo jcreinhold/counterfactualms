@@ -173,7 +173,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
     for i, intervention in enumerate(interventions):
         x = imgs[i]
         x_test = orig_data['x']
-        diff = (x_test - x).squeeze()
+        diff = (x - x_test).squeeze()
         if not normalise_all:
             lim = diff.abs().max()
         ax[0, i].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
