@@ -10,6 +10,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+from PIL import Image
 import pyro
 import torch
 
@@ -18,15 +19,14 @@ torch.autograd.set_grad_enabled(False)
 
 mpl.rcParams['figure.dpi'] = 300
 
-img_cm = 'Greys_r'
+img_cm = 'gray'
 diff_cm = 'seismic'
 
 from counterfactualms.datasets.calabresi import CalabresiDataset
 
-csv = "/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv"
-downsample = 2
-crop_size = (224, 224)
-calabresi_test = CalabresiDataset(csv, crop_type='center', downsample=downsample, crop_size=crop_size)
+downsample = None
+crop_size = None
+calabresi_test = None
 n_rot90 = 0
 
 from counterfactualms.experiments import calabresi  # noqa: F401
@@ -42,25 +42,17 @@ variables = (
     'brain_volume',
     'ventricle_volume',
     'lesion_volume',
-    'slice_brain_volume',
-    'slice_ventricle_volume',
-    'slice_lesion_volume',
     'duration',
     'score',
-    'slice_number',
 )
 var_name = {
     'ventricle_volume': 'v',
     'brain_volume': 'b',
     'lesion_volume': 'l',
-    'slice_ventricle_volume': 'sv',
-    'slice_brain_volume': 'sb',
-    'slice_lesion_volume': 'sl',
     'sex': 's',
     'age': 'a',
     'score': 'e',
     'duration': 'd',
-    'slice_number': 'n',
 }
 value_fmt = {
     'score': lambda s: rf'{np.round(s,2):.2g}',
@@ -68,16 +60,23 @@ value_fmt = {
     'ventricle_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
     'brain_volume': lambda s: rf'{int(np.round(s/1000)):d}\,\mathrm{{ml}}',
     'lesion_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
-    'slice_ventricle_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
-    'slice_brain_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
-    'slice_lesion_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
     'age': lambda s: rf'{int(s):d}\,\mathrm{{y}}',
     'sex': lambda s: r'{}'.format(['\mathrm{F}', '\mathrm{M}'][int(s)]),
     'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
-    'slice_number': lambda s: rf'{int(s):d}',
+}
+save_fmt = {
+    'score': lambda s: f'{np.round(s,2):.2g}',
+    'duration': lambda s: f'{np.round(s,2):.2g}',
+    'ventricle_volume': lambda s: f'{np.round(s/1000,2):.2g}',
+    'brain_volume': lambda s: f'{int(np.round(s/1000)):d}',
+    'lesion_volume': lambda s: f'{np.round(s/1000,2):.2g}',
+    'age': lambda s: f'{int(s):d}',
+    'sex': lambda s: '{}'.format(['F', 'M'][int(s)]),
+    'type': lambda s: '{}'.format(['HC', 'MS'][int(s)]),
 }
 
-def setup(model_paths):
+
+def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2):
     """ run this first with paths to models corresponding to experiments """
     if isinstance(model_paths, str):
         model_paths = [model_paths]
@@ -106,6 +105,12 @@ def setup(model_paths):
             loaded_model.eval()
             global loaded_models
             loaded_models[exp] = loaded_model
+            global crop_size
+            crop_size = exp_crop_size
+            global downsample
+            downsample = exp_downsample
+            global calabresi_test
+            calabresi_test = CalabresiDataset(csv_path, crop_type='center', downsample=downsample, crop_size=crop_size)
             def sample_pgm(num_samples, model):
                 with pyro.plate('observations', num_samples):
                     return model.pgm_model()
@@ -125,6 +130,15 @@ def fmt_intervention(intervention):
         return f"do({all_interventions})"
 
 
+def fmt_save(intervention):
+    if isinstance(intervention, str):
+        var, value = intervention[3:-1].split('=')
+        return f"do({var_name[var]}={save_fmt[var](value)})"
+    else:
+        all_interventions = ','.join([f'{var_name[k]}={save_fmt[k](v)}' for k, v in intervention.items()])
+        return f"do({all_interventions})"
+
+
 def prep_data(batch):
     x = batch['image'].unsqueeze(0) * 255.
     age = batch['age'].unsqueeze(0).unsqueeze(0).float()
@@ -132,21 +146,13 @@ def prep_data(batch):
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
     brain_volume = batch['brain_volume'].unsqueeze(0).unsqueeze(0).float()
     lesion_volume = batch['lesion_volume'].unsqueeze(0).unsqueeze(0).float()
-    slice_ventricle_volume = batch['slice_ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
-    slice_brain_volume = batch['slice_brain_volume'].unsqueeze(0).unsqueeze(0).float()
-    slice_lesion_volume = batch['slice_lesion_volume'].unsqueeze(0).unsqueeze(0).float()
     score = batch['score'].unsqueeze(0).unsqueeze(0).float()
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     type = batch['type'].unsqueeze(0).unsqueeze(0).float()
-    slice_number = batch['slice_number'].unsqueeze(0).unsqueeze(0).float()
     x = x.float()
     return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
             'brain_volume': brain_volume, 'lesion_volume': lesion_volume,
-            'slice_ventricle_volume': slice_ventricle_volume,
-            'slice_brain_volume': slice_brain_volume,
-            'slice_lesion_volume': slice_lesion_volume,
-            'score': score, 'duration': duration, 'type': type,
-            'slice_number': slice_number}
+            'score': score, 'duration': duration, 'type': type}
 
 
 def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32):
@@ -167,7 +173,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
     for i, intervention in enumerate(interventions):
         x = imgs[i]
         x_test = orig_data['x']
-        diff = (x_test - x).squeeze()
+        diff = (x - x_test).squeeze()
         if not normalise_all:
             lim = diff.abs().max()
         ax[0, i].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
@@ -180,9 +186,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
             axi.yaxis.set_major_locator(plt.NullLocator())
 
     orig_data['type'] = ms_type
-    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$;\n'
-                '$sb={slice_brain_volume}$; $sv={slice_ventricle_volume}$; $sl={slice_lesion_volume}$; '
-                '$d={duration}$; $e={score}$; $n={slice_number}$').format(
+    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$; $d={duration}$; $e={score}$').format(
         **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
     fig.suptitle(suptitle, fontsize=13)
@@ -191,7 +195,18 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
 
 
 def interactive_plot(model_name):
-    def plot_intervention(intervention, idx, num_samples=32):
+    def _to_png(x):
+        if hasattr(x, 'numpy'):
+            x = x.numpy()
+        x = np.rot90(x.squeeze(), n_rot90)
+        x = np.clip(x, 0., 255.)
+        x = x.astype(np.uint8)
+        x = Image.fromarray(x)
+        sz = [downsample*s for s in x.size]
+        x = x.resize(sz, resample=Image.BILINEAR)
+        return x
+
+    def plot_intervention(intervention, idx, num_samples=32, save_image_dir='', save=False):
         fig, ax = plt.subplots(1, 4, figsize=(10, 2.5), gridspec_kw=dict(wspace=0, hspace=0))
         orig_data = prep_data(calabresi_test[idx])
         ms_type = orig_data['type']
@@ -217,8 +232,7 @@ def interactive_plot(model_name):
 
         orig_data['type'] = ms_type
         att_str = ('$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$l={lesion_volume}$\n'
-                   '$sb={slice_brain_volume}$\n$sv={slice_ventricle_volume}$\n$sl={slice_lesion_volume}$\n'
-                   '$d={duration}$\n$e={score}$\n$t={type}$\n$n={slice_number}$').format(
+                   '$d={duration}$\n$e={score}$\n$t={type}$').format(
             **{att: value_fmt[att](orig_data[att].item()) for att in variables + ('type',)}
         )
 
@@ -226,17 +240,26 @@ def interactive_plot(model_name):
                       verticalalignment='center', transform=ax[0].transAxes,
                       fontsize=mpl.rcParams['axes.titlesize'])
         fig.tight_layout()
+        if save_image_dir and save:
+            x = _to_png(x)
+            x_test = _to_png(x_test)
+            intervention_str = fmt_save(intervention)
+            x.save(os.path.join(save_image_dir, intervention_str+'_cf.png'))
+            x_test.save(os.path.join(save_image_dir, intervention_str+'_orig.png'))
+            plt.savefig(intervention_str+'_full.pdf');
         plt.show()
 
-    from ipywidgets import interactive, IntSlider, FloatSlider, HBox, VBox, Checkbox, Dropdown
+    from ipywidgets import (
+        interactive, IntSlider, FloatSlider, HBox, VBox,
+        Checkbox, Dropdown, Text, Button, BoundedIntText
+    )
     from IPython.display import display
 
     def plot(image, age, sex, brain_volume, ventricle_volume, lesion_volume,
-             slice_brain_volume, slice_ventricle_volume, slice_lesion_volume,
-             duration, score, slice_number,
+             duration, score,
              do_age, do_sex, do_brain_volume, do_ventricle_volume, do_lesion_volume,
-             do_slice_brain_volume, do_slice_ventricle_volume, do_slice_lesion_volume,
-             do_duration, do_score, do_slice_number):
+             do_duration, do_score,
+             save_image_dir, save):
         intervention = {}
         if do_age:
             intervention['age'] = age
@@ -248,25 +271,14 @@ def interactive_plot(model_name):
             intervention['ventricle_volume'] = ventricle_volume * 1000.
         if do_lesion_volume:
             intervention['lesion_volume'] = lesion_volume * 1000.
-        if do_slice_brain_volume:
-            intervention['slice_brain_volume'] = slice_brain_volume * 1000.
-        if do_slice_ventricle_volume:
-            intervention['slice_ventricle_volume'] = slice_ventricle_volume * 1000.
-        if do_slice_lesion_volume:
-            intervention['slice_lesion_volume'] = slice_lesion_volume * 1000.
         if do_duration:
             intervention['duration'] = duration
         if do_score:
             intervention['score'] = score
-        if do_slice_number:
-            intervention['slice_number'] = slice_number
 
-        plot_intervention(intervention, image)
+        plot_intervention(intervention, image, save_image_dir=save_image_dir, save=save)
 
-    slice_min = loaded_models[model_name].slice_number_min
-    slice_max = loaded_models[model_name].slice_number_max
-
-    w = interactive(plot, image=IntSlider(min=0, max=len(calabresi_test)-1, description='Image #'),
+    w = interactive(plot, image=BoundedIntText(min=0, max=len(calabresi_test)-1, description='Image #'),
         age=FloatSlider(min=20., max=80., step=1., continuous_update=False, description='Age'),
         do_age=Checkbox(description='do(age)'),
         sex=Dropdown(options=[('female', 0.), ('male', 1.)], description='Sex'),
@@ -277,21 +289,17 @@ def interactive_plot(model_name):
         do_ventricle_volume=Checkbox(description='do(ventricle_volume)'),
         lesion_volume=FloatSlider(min=1e-5, max=66., step=0.1, continuous_update=False, description='Lesion Volume (ml):', style={'description_width': 'initial'}),
         do_lesion_volume=Checkbox(description='do(lesion_volume)'),
-        slice_brain_volume=FloatSlider(min=6., max=18., step=0.5, continuous_update=False, description='Slice Brain Volume (ml):', style={'description_width': 'initial'}),
-        do_slice_brain_volume=Checkbox(description='do(slice_brain_volume)'),
-        slice_ventricle_volume=FloatSlider(min=1e-5, max=3.0, step=0.1, continuous_update=False, description='Slice Ventricle Volume (ml):', style={'description_width': 'initial'}),
-        do_slice_ventricle_volume=Checkbox(description='do(slice_ventricle_volume)'),
-        slice_lesion_volume=FloatSlider(min=1e-5, max=3.0, step=0.1, continuous_update=False, description='Slice Lesion Volume (ml):', style={'description_width': 'initial'}),
-        do_slice_lesion_volume=Checkbox(description='do(slice_lesion_volume)'),
         duration=FloatSlider(min=1e-5, max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
         do_duration=Checkbox(description='do(duration)'),
         score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
         do_score=Checkbox(description='do(score)'),
-        slice_number=FloatSlider(min=round(slice_min.item()), max=round(slice_max.item()), step=1., continuous_update=False, description='Slice #:', style={'description_width': 'initial'}),
-        do_slice_number=Checkbox(description='do(slice_number)'),
+        save_image_dir=Text(value='', placeholder='Full path', description='Save Image Directory:', style={'description_width': 'initial'}),
+        save=Checkbox(description='Save')
         )
 
     n = len(variables)
-    ui = VBox([w.children[0], VBox([HBox([w.children[i], w.children[i+n]]) for i in range(1,n+1)]), w.children[-1]])
+    ui = VBox([HBox([w.children[0], w.children[-3], w.children[-2]]),  # image # and save_image_dir
+               VBox([HBox([w.children[i], w.children[i+n]]) for i in range(1,n+1)]), # vars and intervention checkboxes
+               w.children[-1]])  # show image
     display(ui)
     w.update()

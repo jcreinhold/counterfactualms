@@ -146,8 +146,6 @@ class BaseVISEM(BaseSEM):
 
         # priors
         self.sex_logits = torch.nn.Parameter(torch.zeros([1, ]))
-        self.register_buffer('slice_number_min', torch.zeros([1, ], requires_grad=False))
-        self.register_buffer('slice_number_max', torch.zeros([1, ], requires_grad=False))
 
         for k in self.required_data - {'sex', 'x'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
@@ -159,24 +157,15 @@ class BaseVISEM(BaseSEM):
         self.register_buffer('z_loc', torch.zeros([latent_dim, ], requires_grad=False))
         self.register_buffer('z_scale', torch.ones([latent_dim, ], requires_grad=False))
 
-        for k in self.required_data - {'sex', 'slice_number', 'x'}:
+        for k in self.required_data - {'sex', 'x'}:
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
-
-        self.register_buffer(f'slice_number_flow_norm_loc', torch.zeros([], requires_grad=False))
-        self.register_buffer(f'slice_number_flow_norm_scale', torch.ones([], requires_grad=False))
 
         # age flow
         self.age_flow_components = ComposeTransformModule([Spline(1)])
         self.age_flow_lognorm = AffineTransform(loc=self.age_flow_lognorm_loc.item(), scale=self.age_flow_lognorm_scale.item())
         self.age_flow_constraint_transforms = ComposeTransform([self.age_flow_lognorm, ExpTransform()])
         self.age_flow_transforms = ComposeTransform([self.age_flow_components, self.age_flow_constraint_transforms])
-
-        # slice number flow
-        self.slice_number_flow_components = ComposeTransformModule([Spline(1)])
-        self.slice_number_flow_norm = AffineTransform(loc=self.slice_number_flow_norm_loc.item(), scale=self.slice_number_flow_norm_scale.item())
-        self.slice_number_flow_constraint_transforms = ComposeTransform([SigmoidTransform(), self.slice_number_flow_norm])
-        self.slice_number_flow_transforms = ComposeTransform([self.slice_number_flow_components, self.slice_number_flow_constraint_transforms])
 
         # other flows shared components
         self.ventricle_volume_flow_lognorm = AffineTransform(loc=self.ventricle_volume_flow_lognorm_loc.item(), scale=self.ventricle_volume_flow_lognorm_scale.item())  # noqa: E501
@@ -187,15 +176,6 @@ class BaseVISEM(BaseSEM):
 
         self.lesion_volume_flow_lognorm = AffineTransform(loc=self.lesion_volume_flow_lognorm_loc.item(), scale=self.lesion_volume_flow_lognorm_scale.item())
         self.lesion_volume_flow_constraint_transforms = ComposeTransform([self.lesion_volume_flow_lognorm, ExpTransform()])
-
-        self.slice_ventricle_volume_flow_lognorm = AffineTransform(loc=self.slice_ventricle_volume_flow_lognorm_loc.item(), scale=self.slice_ventricle_volume_flow_lognorm_scale.item())  # noqa: E501
-        self.slice_ventricle_volume_flow_constraint_transforms = ComposeTransform([self.slice_ventricle_volume_flow_lognorm, ExpTransform()])
-
-        self.slice_brain_volume_flow_lognorm = AffineTransform(loc=self.slice_brain_volume_flow_lognorm_loc.item(), scale=self.slice_brain_volume_flow_lognorm_scale.item())
-        self.slice_brain_volume_flow_constraint_transforms = ComposeTransform([self.slice_brain_volume_flow_lognorm, ExpTransform()])
-
-        self.slice_lesion_volume_flow_lognorm = AffineTransform(loc=self.slice_lesion_volume_flow_lognorm_loc.item(), scale=self.slice_lesion_volume_flow_lognorm_scale.item())
-        self.slice_lesion_volume_flow_constraint_transforms = ComposeTransform([self.slice_lesion_volume_flow_lognorm, ExpTransform()])
 
         self.duration_flow_lognorm = AffineTransform(loc=self.duration_flow_lognorm_loc.item(), scale=self.duration_flow_lognorm_scale.item())
         self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_lognorm, ExpTransform()])
@@ -262,19 +242,19 @@ class BaseVISEM(BaseSEM):
     @property
     def required_data(self):
         return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
-                'slice_ventricle_volume', 'slice_brain_volume', 'slice_lesion_volume',
-                'score', 'duration', 'slice_number'}
+                'score', 'duration'}
 
     def _check_observation(self, obs):
         keys = obs.keys()
-        assert self.required_data.issubset(set(keys)), f'Incompatible observation: {tuple(keys)}'
+        assert self.required_data == set(keys), f'Incompatible observation: {tuple(keys)}'
 
     @pyro_method
     def infer(self, obs):
         self._check_observation(obs)
-        z = self.infer_z(obs)
-        obs.update(dict(z=z))
-        exogeneous = self.infer_exogeneous(obs)
+        obs_ = obs.copy()
+        z = self.infer_z(obs_)
+        obs_.update(dict(z=z))
+        exogeneous = self.infer_exogeneous(obs_)
         exogeneous['z'] = z
         return exogeneous
 
@@ -294,25 +274,23 @@ class BaseVISEM(BaseSEM):
         return torch.stack(recons).mean(0)
 
     @pyro_method
-    def counterfactual(self, obs:Mapping, condition:Mapping=None, num_particles:int=1):
+    def counterfactual(self, obs, condition:Mapping=None, num_particles:int=1):
         self._check_observation(obs)
-        z_dist = pyro.poutine.trace(self.guide).get_trace(obs).nodes['z']['fn']
+        obs_ = obs.copy()
+        z_dist = pyro.poutine.trace(self.guide).get_trace(obs_).nodes['z']['fn']
+        n = obs_['x'].shape[0]
 
         counterfactuals = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
-            obs.update(dict(z=z))
-            exogeneous = self.infer_exogeneous(obs)
+            obs_.update(dict(z=z))
+            exogeneous = self.infer_exogeneous(obs_)
             exogeneous['z'] = z
             # condition on these vars if they aren't included in 'do' as they are root nodes
             # and we don't have the exogeneous noise for them yet
             if 'sex' not in condition.keys():
-                exogeneous['sex'] = obs['sex']
-            if 'slice_number' not in condition.keys():
-                exogeneous['slice_number'] = obs['slice_number']
+                exogeneous['sex'] = obs_['sex']
 
-            # sample_scm calls model hence the strings in the zip in the return statement
-            n = obs['x'].shape[0]
             counter = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogeneous), data=condition)(n)
             counterfactuals += [counter]
 
