@@ -229,20 +229,12 @@ class BaseCovariateExperiment(pl.LightningModule):
         raise NotImplementedError()
 
     def validation_epoch_end(self, outputs):
-        outputs = self.assemble_epoch_end_outputs(outputs)
-        metrics = {('val/' + k): v for k, v in outputs.items()}
         if self.current_epoch % self.hparams.sample_img_interval == 0:
             self.sample_images()
-        val_loss = metrics['val/loss'] if isinstance(metrics['val/loss'], torch.Tensor) else torch.tensor(metrics['val/loss'])
-        return {'val_loss': val_loss, 'log': metrics}
 
     def test_epoch_end(self, outputs):
-        logger.info('Assembling outputs')
-        outputs = self.assemble_epoch_end_outputs(outputs)
-        samples = outputs.pop('samples')
-
         sample_trace = pyro.poutine.trace(self.pyro_model.sample).get_trace(self.hparams.test_batch_size)
-        samples['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
+        outputs['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
 
         cond_data = {
             'brain_volume': self.brain_volume_range.repeat(self.hparams.test_batch_size, 1),
@@ -251,18 +243,16 @@ class BaseCovariateExperiment(pl.LightningModule):
             'z': torch.randn([self.hparams.test_batch_size, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat_interleave(9, 0)
         }
         sample_trace = pyro.poutine.trace(pyro.condition(self.pyro_model.sample, data=cond_data)).get_trace(9 * self.hparams.test_batch_size)
-        samples['conditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
+        outputs['conditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
 
-        logger.info(f'Got samples: {tuple(samples.keys())}')
-        metrics = {('test/' + k): v for k, v in outputs.items()}
-        for k, v in samples.items():
+        logger.info(f'Got samples: {tuple(outputs.keys())}')
+        for k, v in outputs.items():
             p = os.path.join(self.trainer.logger.experiment.log_dir, f'{k}.pt')
             logging.info(f'Saving samples for {k} to {p}')
             torch.save(v, p)
 
         p = os.path.join(self.trainer.logger.experiment.log_dir, 'metrics.pt')
         torch.save(metrics, p)
-        return {'test_loss': metrics['test/loss'], 'log': metrics}
 
     def assemble_epoch_end_outputs(self, outputs):
         num_items = len(outputs)

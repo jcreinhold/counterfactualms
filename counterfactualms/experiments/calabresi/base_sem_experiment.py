@@ -417,27 +417,33 @@ class SVIExperiment(BaseCovariateExperiment):
         if self.hparams.validate:
             logging.info('Validation:')
             self.print_trace_updates(batch)
-        loss = self.svi.step(batch)
+        loss = torch.as_tensor(self.svi.step(batch))
+        self.log('train_loss', loss)
         metrics = self.get_trace_metrics(batch)
         if np.isnan(loss):
             self.logger.experiment.add_text('nan', f'nand at {self.current_epoch}:\n{metrics}')
             raise ValueError('loss went to nan with metrics:\n{}'.format(metrics))
-        tensorboard_logs = {('train/' + k): v for k, v in metrics.items()}
-        tensorboard_logs['train/loss'] = loss
-        return {'loss': torch.Tensor([loss]), 'log': tensorboard_logs}
+        for k, v in metrics.items():
+            self.log('train/' + k, v)
+        return loss
 
     def validation_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
+        self.log('val_loss', loss)
         metrics = self.get_trace_metrics(batch)
-        return {'loss': loss, **metrics}
+        for k, v in metrics.items():
+            self.log('val/' + k, v)
 
     def test_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
+        self.log('test_loss', loss)
         metrics = self.get_trace_metrics(batch)
+        for k, v in outputs.items():
+            self.log('test/' + k, v)
         samples = self.build_test_samples(batch)
-        return {'loss': loss, **metrics, 'samples': samples}
+        return samples
 
     @classmethod
     def add_arguments(cls, parser):
