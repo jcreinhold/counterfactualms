@@ -418,30 +418,30 @@ class SVIExperiment(BaseCovariateExperiment):
             logging.info('Validation:')
             self.print_trace_updates(batch)
         loss = torch.as_tensor(self.svi.step(batch))
-        self.log('train_loss', loss)
+        self.log('train_loss', loss, on_step=False, on_epoch=True)
         metrics = self.get_trace_metrics(batch)
         if np.isnan(loss):
             self.logger.experiment.add_text('nan', f'nand at {self.current_epoch}:\n{metrics}')
             raise ValueError('loss went to nan with metrics:\n{}'.format(metrics))
         for k, v in metrics.items():
-            self.log('train/' + k, v)
+            self.log('train/' + k, v, on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
-        self.log('val_loss', loss)
+        self.log('val_loss', loss, on_step=False, on_epoch=True)
         metrics = self.get_trace_metrics(batch)
         for k, v in metrics.items():
-            self.log('val/' + k, v)
+            self.log('val/' + k, v, on_step=False, on_epoch=True)
 
     def test_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
-        self.log('test_loss', loss)
+        self.log('test_loss', loss, on_step=False, on_epoch=True)
         metrics = self.get_trace_metrics(batch)
         for k, v in metrics.items():
-            self.log('test/' + k, v)
+            self.log('test/' + k, v, on_step=False, on_epoch=True)
         samples = self.build_test_samples(batch)
         return {'samples': samples, 'metrics': metrics}
 
