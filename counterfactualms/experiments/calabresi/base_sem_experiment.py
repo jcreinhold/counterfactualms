@@ -417,7 +417,8 @@ class SVIExperiment(BaseCovariateExperiment):
         if self.hparams.validate:
             logging.info('Validation:')
             self.print_trace_updates(batch)
-        loss = torch.as_tensor(self.svi.step(batch))
+        loss = self.svi.step(batch)
+        loss = torch.as_tensor(loss)
         self.log('train_loss', loss)
         metrics = self.get_trace_metrics(batch)
         if np.isnan(loss):
