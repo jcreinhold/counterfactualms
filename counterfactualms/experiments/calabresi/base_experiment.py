@@ -121,7 +121,7 @@ class BaseSEM(PyroModule):
     @classmethod
     def add_arguments(cls, parser):
         parser.add_argument('--preprocessing', default='realnvp', type=str, help="type of preprocessing (default: %(default)s)", choices=['realnvp', 'glow'])
-        parser.add_argument('--downsample', default=3, type=int, help="downsampling factor (-1 for none) (default: %(default)s)")
+        parser.add_argument('--downsample', default=2, type=int, help="downsampling factor (-1 for none) (default: %(default)s)")
         return parser
 
 
@@ -150,7 +150,7 @@ class BaseCovariateExperiment(pl.LightningModule):
     def prepare_data(self):
         downsample = None if self.hparams.downsample == -1 else self.hparams.downsample
         train_crop_type = self.hparams.train_crop_type if hasattr(self.hparams, 'train_crop_type') else 'random'
-        crop_size = self.hparams.crop_size if hasattr(self.hparams, 'crop_size') else (192, 192)
+        crop_size = self.hparams.crop_size if hasattr(self.hparams, 'crop_size') else (224, 224)
         self.calabresi_train = CalabresiDataset(self.hparams.train_csv, crop_size=crop_size, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
         self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_size=crop_size, crop_type='center', downsample=downsample)
         self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_size=crop_size, crop_type='center', downsample=downsample)
@@ -435,7 +435,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             sampled_ventricle_volume = sample_trace.nodes['ventricle_volume']['value']
 
             s = samples.shape[0] // 8
-            self.log_img_grid('samples', samples.data[::s])
+            m = 8 * s
+            self.log_img_grid('samples', samples.data[:m:s])
 
             cond_data = {'brain_volume': self.brain_volume_range,
                          'ventricle_volume': self.ventricle_volume_range,
@@ -460,7 +461,8 @@ class BaseCovariateExperiment(pl.LightningModule):
                 self.logger.experiment.add_histogram(tag, val, self.current_epoch)
 
             s = obs_batch['x'].shape[0] // 8
-            obs_batch = {k: v[::s] for k, v in obs_batch.items()}
+            m = 8 * s
+            obs_batch = {k: v[:m:s] for k, v in obs_batch.items()}
 
             self.log_img_grid('input', obs_batch['x'], save_img=True)
 
@@ -514,9 +516,9 @@ class BaseCovariateExperiment(pl.LightningModule):
         parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
-        parser.add_argument('--crop-size', default=(192,192), type=int, nargs=2, help="size of patch to take from image (default: %(default)s)")
+        parser.add_argument('--crop-size', default=(224,224), type=int, nargs=2, help="size of patch to take from image (default: %(default)s)")
         parser.add_argument('--sample-img-interval', default=10, type=int, help="interval in which to sample and log images (default: %(default)s)")
-        parser.add_argument('--train-batch-size', default=256, type=int, help="train batch size (default: %(default)s)")
+        parser.add_argument('--train-batch-size', default=128, type=int, help="train batch size (default: %(default)s)")
         parser.add_argument('--test-batch-size', default=64, type=int, help="test batch size (default: %(default)s)")
         parser.add_argument('--validate', default=False, action='store_true', help="whether to validate (default: %(default)s)")
         parser.add_argument('--lr', default=1e-4, type=float, help="lr of deep part (default: %(default)s)")
