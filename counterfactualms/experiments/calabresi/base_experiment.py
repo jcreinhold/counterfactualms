@@ -202,19 +202,21 @@ class BaseCovariateExperiment(pl.LightningModule):
     def configure_optimizers(self):
         pass
 
+    def _dataloader_params(self):
+        num_workers = len(os.sched_getaffinity(0)) // 2  # use half of the available cpus
+        return {'num_workers': num_workers, 'pin_memory': self.trainer.on_gpu}
+
     def train_dataloader(self):
-        num_cpus = len(os.sched_getaffinity(0)) // 2
-        on_gpu = torch.cuda.is_available()  # assume if cuda available, we are using it
         return DataLoader(self.calabresi_train, batch_size=self.train_batch_size,
-                          shuffle=True, num_workers=num_cpus, pin_memory=on_gpu)
+                          shuffle=True, **self._dataloader_params())
 
     def val_dataloader(self):
-        self.val_loader = DataLoader(self.calabresi_val, batch_size=self.test_batch_size, shuffle=False)
-        return self.val_loader
+        return DataLoader(self.calabresi_val, batch_size=self.test_batch_size,
+                          shuffle=False, **self._dataloader_params())
 
     def test_dataloader(self):
-        self.test_loader = DataLoader(self.calabresi_test, batch_size=self.test_batch_size, shuffle=False)
-        return self.test_loader
+        return DataLoader(self.calabresi_test, batch_size=self.test_batch_size,
+                          shuffle=False, **self._dataloader_params())
 
     def forward(self, *args, **kwargs):
         pass
@@ -337,7 +339,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.logger.experiment.add_image(tag, grid, self.current_epoch)
 
     def get_batch(self, loader):
-        batch = next(iter(self.val_loader))
+        batch = next(iter(loader))
         batch = {k: v.to(self.torch_device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
         return batch
 
@@ -437,7 +439,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             samples = pyro.condition(self.pyro_model.sample, data=cond_data)(9)['x']
             self.log_img_grid('cond_samples', samples.data, nrow=3)
 
-            obs_batch = self.prep_batch(self.get_batch(self.val_loader))
+            obs_batch = self.prep_batch(self.get_batch(self.val_dataloader()))
 
             kde_data = {
                 'batch': {'brain_volume': obs_batch['brain_volume'],
