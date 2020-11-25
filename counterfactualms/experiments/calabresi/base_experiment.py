@@ -233,8 +233,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.sample_images()
 
     def test_epoch_end(self, outputs):
+        metrics = outputs['metrics']
+        samples = outputs['samples']
         sample_trace = pyro.poutine.trace(self.pyro_model.sample).get_trace(self.hparams.test_batch_size)
-        outputs['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
+        samples['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
 
         cond_data = {
             'brain_volume': self.brain_volume_range.repeat(self.hparams.test_batch_size, 1),
@@ -243,10 +245,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             'z': torch.randn([self.hparams.test_batch_size, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat_interleave(9, 0)
         }
         sample_trace = pyro.poutine.trace(pyro.condition(self.pyro_model.sample, data=cond_data)).get_trace(9 * self.hparams.test_batch_size)
-        outputs['conditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
+        samples['conditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
 
-        logger.info(f'Got samples: {tuple(outputs.keys())}')
-        for k, v in outputs.items():
+        logger.info(f'Got samples: {tuple(samples.keys())}')
+        for k, v in samples.items():
             p = os.path.join(self.trainer.logger.experiment.log_dir, f'{k}.pt')
             logging.info(f'Saving samples for {k} to {p}')
             torch.save(v, p)

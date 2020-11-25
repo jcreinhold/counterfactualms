@@ -440,10 +440,10 @@ class SVIExperiment(BaseCovariateExperiment):
         loss = self.svi.evaluate_loss(batch)
         self.log('test_loss', loss)
         metrics = self.get_trace_metrics(batch)
-        for k, v in outputs.items():
+        for k, v in metrics.items():
             self.log('test/' + k, v)
         samples = self.build_test_samples(batch)
-        return samples
+        return {'samples': samples, 'metrics': metrics}
 
     @classmethod
     def add_arguments(cls, parser):
