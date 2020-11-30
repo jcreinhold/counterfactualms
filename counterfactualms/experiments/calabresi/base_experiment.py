@@ -92,8 +92,8 @@ class BaseSEM(PyroModule):
         raise NotImplementedError()
 
     @pyro_method
-    def infer_exogeneous(self, obs):
-        # assuming that we use transformed distributions for everything:
+    def infer_exogenous(self, obs):
+        # assuming that we use transformed distributions for everything
         cond_sample = pyro.condition(self.sample, data=obs)
         cond_trace = pyro.poutine.trace(cond_sample).get_trace(obs['x'].shape[0])
 
@@ -106,6 +106,7 @@ class BaseSEM(PyroModule):
             if isinstance(fn, Independent):
                 fn = fn.base_dist
             if isinstance(fn, TransformedDistribution):
+                # compute exogenous base distribution at all sites. base dist created with TransformReparam
                 output[name + '_base'] = ComposeTransform(fn.transforms).inv(node['value'])
 
         return output
@@ -449,9 +450,9 @@ class BaseCovariateExperiment(pl.LightningModule):
             }
             self.log_kdes('sample_kde', kde_data, save_img=True)
 
-            exogeneous = self.pyro_model.infer(obs_batch)
+            exogenous = self.pyro_model.infer(obs_batch)
 
-            for (tag, val) in exogeneous.items():
+            for (tag, val) in exogenous.items():
                 self.logger.experiment.add_histogram(tag, val, self.current_epoch)
 
             s = obs_batch['x'].shape[0] // 8

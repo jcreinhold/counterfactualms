@@ -202,7 +202,7 @@ class BaseVISEM(BaseSEM):
         return super()._get_preprocess_transforms().inv
 
     def _get_transformed_x_dist(self, latent):
-        x_pred_dist = self.decoder.predict(latent)
+        x_pred_dist = self.decoder.predict(latent)  # returns a normal dist with mean of the predicted image
         x_base_dist = Normal(self.x_base_loc, self.x_base_scale).to_event(3)  # 3 dimensions starting from right dep.
 
         preprocess_transform = self._get_preprocess_transforms()
@@ -254,9 +254,9 @@ class BaseVISEM(BaseSEM):
         obs_ = obs.copy()
         z = self.infer_z(obs_)
         obs_.update(dict(z=z))
-        exogeneous = self.infer_exogeneous(obs_)
-        exogeneous['z'] = z
-        return exogeneous
+        exogenous = self.infer_exogenous(obs_)
+        exogenous['z'] = z
+        return exogenous
 
     @pyro_method
     def reconstruct(self, obs, num_particles:int=1):
@@ -277,27 +277,27 @@ class BaseVISEM(BaseSEM):
     def counterfactual(self, obs, condition:Mapping=None, num_particles:int=1):
         self._check_observation(obs)
         obs_ = obs.copy()
-        z_dist = pyro.poutine.trace(self.guide).get_trace(obs_).nodes['z']['fn']
+        z_dist = pyro.poutine.trace(self.guide).get_trace(obs_).nodes['z']['fn']  # variational posterior
         n = obs_['x'].shape[0]
 
         counterfactuals = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
             obs_.update(dict(z=z))
-            exogeneous = self.infer_exogeneous(obs_)
-            exogeneous['z'] = z
+            exogenous = self.infer_exogenous(obs_)
+            exogenous['z'] = z
             # condition on these vars if they aren't included in 'do' as they are root nodes
-            # and we don't have the exogeneous noise for them yet
+            # and we don't have the exogenous noise for them yet
             if 'sex' not in condition.keys():
-                exogeneous['sex'] = obs_['sex']
+                exogenous['sex'] = obs_['sex']
 
-            counter = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogeneous), data=condition)(n)
-            counterfactuals += [counter]
+            cf = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogenous), data=condition)(n)
+            counterfactuals += [cf]
 
         out = {k: [] for k in self.required_data}
-        for c in counterfactuals:
+        for cf in counterfactuals:
             for k in self.required_data:
-                out[k].append(c[k])
+                out[k].append(cf[k])
         out = {k: torch.stack(v).mean(0) for k, v in out.items()}
         return out
 
