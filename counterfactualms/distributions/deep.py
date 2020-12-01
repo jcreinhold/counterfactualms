@@ -219,34 +219,17 @@ class DeepBernoulli(DeepConditional):
 
 if __name__ == '__main__':
     import torch
-    from arch import mnist
+    from counterfactualms.arch import medical
 
     hidden_dim = 10
     latent_dim = 10
-    encoder = DeepIndepNormal(mnist.Encoder(hidden_dim), hidden_dim, latent_dim)
+    encoder = DeepIndepNormal(medical.Encoder(hidden_dim), hidden_dim, latent_dim)
     x = torch.randn(5, 1, 28, 28)
     post = encoder.predict(x)
     print(post.batch_shape, post.event_shape)
 
-    # decoder = Conv2dIndepNormal(mnist.Decoder(latent_dim), 1, 1)
-    decoder = DeepBernoulli(mnist.Decoder(latent_dim))
+    decoder = DeepBernoulli(medical.Decoder(latent_dim))
     latents = post.rsample()
     print(latents.shape)
     recon = decoder.predict(latents)
     print(recon.batch_shape, recon.event_shape)
-
-    # from distributions import params
-    #
-    # num_clusters = 4
-    # sin = MixtureSIN(
-    #     DeepMultivariateNormal(mnist.Encoder(hidden_dim), hidden_dim, latent_dim),
-    #     params.MixtureParams(
-    #         params.CategoricalParams(num_clusters),
-    #         params.MultivariateNormalParams(latent_dim, (num_clusters,))
-    #     )
-    # )
-    #
-    # print(sin)
-    #
-    # post = sin.predict(x)
-    # print(post)

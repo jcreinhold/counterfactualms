@@ -3,6 +3,7 @@ from typing import Mapping, Sequence, Union
 import torch
 from pyro.distributions import TorchDistribution
 from torch.distributions import register_kl
+from torch.distributions import kl_divergence
 from torch.distributions.constraints import Constraint
 
 from counterfactualms.distributions.multivariate import MultivariateDistribution
@@ -115,8 +116,7 @@ def _kl_factorised_factorised(p: Factorised, q: Factorised):
 
 if __name__ == '__main__':
     from pyro.distributions import Dirichlet, MultivariateNormal
-    from torch.distributions import kl_divergence
-    from distributions.mixture import Mixture
+    from counterfactualms.distributions.mixture import Mixture
 
     B, D1, D2 = 5, 3, 4
     N = 1000

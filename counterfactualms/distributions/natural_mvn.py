@@ -160,7 +160,6 @@ if __name__ == '__main__':
     stdx, stdy, corr = 1., 1., -.7
     cov = torch.tensor([[stdx ** 2, corr * stdx * stdy],
                         [corr * stdx * stdy, stdy ** 2]])
-    # cov = torch.ones(D) + .01 * torch.eye(D)
 
     mean.requires_grad_()
     mvn = td.MultivariateNormal(mean.expand(5, -1), cov, validate_args=True)
@@ -171,48 +170,7 @@ if __name__ == '__main__':
     print(nmvn.entropy())
     print(mvn_.entropy())
     X = nmvn.rsample((N,))
-    # print(X.shape)
     print(mvn.rsample((N,)).shape)
     print(nmvn.log_prob(X).shape)
     print(torch.allclose(mvn.log_prob(X), nmvn.log_prob(X)))
     print(mvn_.rsample((N,)).shape)
-    # torch.autograd.grad(X.mean(), mean)
-
-    import matplotlib.pyplot as plt
-
-    # # xlim, ylim = zip(X.min(0)[0], X.max(0)[0])
-    # xlim = [mean[0].item() - 2. * stdx, mean[0].item() + 2. * stdx]
-    # ylim = [mean[1].item() - 2. * stdy, mean[1].item() + 2. * stdy]
-    # x = torch.linspace(*xlim, 200)
-    # y = torch.linspace(*ylim, 200)
-    # xx, yy = torch.meshgrid(x, y)
-    #
-    # plot_dist(xx, yy, mvn, mvn.sample((N,)))
-    # plt.title("Original")
-    # plt.show()
-    # plot_dist(xx, yy, nmvn, nmvn.sample((N,)))
-    # plt.title("Natural")
-    # plt.show()
-    # plot_dist(xx, yy, mvn_, mvn_.sample((N,)))
-    # plt.title("Reconstructed")
-    # plt.show()
-
-    # #
-    # mvn_logp = mvn.log_prob(samples)
-    # nmvn_logp = nmvn.log_prob(samples)
-    # mvn__logp = mvn_.log_prob(samples)
-    #
-    # diff1 = mvn_logp - nmvn_logp
-    # diff2 = mvn_logp - mvn__logp
-    # print("Avg diff log: {:.4g}".format(diff1.mean()))
-    # print("Avg diff log: {:.4g}".format(diff2.mean()))
-    # print()
-    # print("Avg abs diff log: {:.4g}".format(diff1.abs().mean()))
-    # print("Avg abs diff log: {:.4g}".format(diff2.abs().mean()))
-    # print("Avg rel diff log: {:.4f} %".format(100. * diff1.abs().mean().expm1()))
-    # print("Avg rel diff log: {:.4f} %".format(100. * diff2.abs().mean().expm1()))
-    # print()
-    # print("Max abs diff log: {:.4g}".format(diff1.abs().max()))
-    # print("Max abs diff log: {:.4g}".format(diff2.abs().max()))
-    # print("Max rel diff: {:.4f} %".format(100. * diff1.abs().max().expm1()))
-    # print("Max rel diff: {:.4f} %".format(100. * diff2.abs().max().expm1()))

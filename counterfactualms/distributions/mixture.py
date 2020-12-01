@@ -160,8 +160,6 @@ if __name__ == '__main__':
     components = MultivariateNormal(mean, var)
     print("mixing", mixing.batch_shape, mixing.event_shape)
     print("components", components.batch_shape, components.event_shape)
-    # mixture = MultivariateNormalMixture(mixing, components)
-    # mixture = NaturalMultivariateNormalMixture(mixing, NaturalMultivariateNormal.from_standard(components))
     mixture = Mixture(mixing, NaturalMultivariateNormal.from_standard(components))
     mixture.rename(['x', 'y'])
     print("mixture names", mixture.variable_names)
@@ -198,4 +196,3 @@ if __name__ == '__main__':
     plt.contour(xx, yy, probe_zz.exp(), cmap='inferno')
     plt.plot(*post_mixture.mean[1], 'wo')
     plt.show()
-    # mixture.posterior(td.Normal(mean, std))

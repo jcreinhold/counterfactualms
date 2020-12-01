@@ -56,14 +56,6 @@ if __name__ == '__main__':
     cov = torch.eye(D)
     mvn = MultivariateNormal(mean, cov, var_names='abcdefghij'[:D])
     values = torch.zeros(7, D)
-    # print(mvn.marginalise(0))
-    # print(mvn.marginalise([0]).batch_shape)
-    # print(mvn.condition((1,), (0,), values[:, 0]).batch_shape)
-    # # print(mvn.condition((1,), 0, mean[0]))
-    # # print(mvn.condition(1, (0,), mean[0]))
-    # print(mvn.condition([1, 2], [0], values[:, 0]))
-    # print(mvn.condition([1, 2], [0, 3], values[:, [0, 1]]))
-    # print(mvn.condition([1], [0, 3], values[:, [0, 1]]))
 
     for x_dims in [(0,), [0], [0, 3]]:
         for y_dims in [(1,), [1], [1, 2]]:
