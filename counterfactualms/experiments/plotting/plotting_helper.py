@@ -5,8 +5,6 @@ import os
 import traceback
 import warnings
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
