@@ -5,7 +5,7 @@ import os
 import traceback
 import warnings
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -35,6 +35,7 @@ from counterfactualms.experiments.calabresi.base_experiment import EXPERIMENT_RE
 experiments = ['ConditionalVISEM']
 models = {}
 loaded_models = {}
+device = None
 
 variables = (
     'sex',
@@ -76,7 +77,7 @@ save_fmt = {
 }
 
 
-def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2):
+def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2, use_gpu=True):
     """ run this first with paths to models corresponding to experiments """
     if isinstance(model_paths, str):
         model_paths = [model_paths]
@@ -103,8 +104,10 @@ def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2):
                 if 'norm' in p:
                     setattr(loaded_model, p, getattr(loaded_model, p))
             loaded_model.eval()
+            global device
+            device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
             global loaded_models
-            loaded_models[exp] = loaded_model
+            loaded_models[exp] = loaded_model.to(device)
             global crop_size
             crop_size = exp_crop_size
             global downsample
@@ -161,14 +164,20 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
     orig_data = prep_data(calabresi_test[idx])
     ms_type = orig_data['type']
     del orig_data['type']
+    og = {k: v.to(device) for k, v in orig_data.items()}
     imgs = []
     for intervention in interventions:
         pyro.clear_param_store()
-        cond = {k: torch.tensor([[v]]) for k, v in intervention.items()}
-        counterfactual = loaded_models[model_name].counterfactual(orig_data, cond, num_samples)
+        cond = {k: torch.tensor([[v]]).to(device) for k, v in intervention.items()}
+        counterfactual = loaded_models[model_name].counterfactual(og, cond, num_samples)
+        counterfactual = {k: v.detach().cpu() for k, v in counterfactual.items()}
         imgs += [counterfactual['x']]
         diff = (imgs[-1] - orig_data['x']).squeeze()
         lim = np.maximum(lim, diff.abs().max())
+
+    if 'cuda' in str(device):
+        del og, cond
+        torch.cuda.empty_cache()
 
     for i, intervention in enumerate(interventions):
         x = imgs[i]
@@ -212,9 +221,11 @@ def interactive_plot(model_name):
         ms_type = orig_data['type']
         del orig_data['type']
         x_test = orig_data['x']
+        og = {k: v.to(device) for k, v in orig_data.items()}
         pyro.clear_param_store()
-        cond = {k: torch.tensor([[v]]) for k, v in intervention.items()}
-        counterfactual = loaded_models[model_name].counterfactual(orig_data, cond, num_samples)
+        cond = {k: torch.tensor([[v]]).to(device) for k, v in intervention.items()}
+        counterfactual = loaded_models[model_name].counterfactual(og, cond, num_samples)
+        counterfactual = {k: v.detach().cpu() for k, v in counterfactual.items()}
         x = counterfactual['x']
         diff = (x - x_test).squeeze()
         lim = diff.abs().max()
@@ -229,6 +240,10 @@ def interactive_plot(model_name):
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
+
+        if 'cuda' in str(device):
+            del og, cond
+            torch.cuda.empty_cache()
 
         orig_data['type'] = ms_type
         att_str = ('$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$l={lesion_volume}$\n'
