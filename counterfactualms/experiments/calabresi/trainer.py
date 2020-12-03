@@ -6,6 +6,7 @@ import warnings
 import sys
 
 from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 import torch
 
@@ -26,6 +27,7 @@ def main():
                             help="increase output verbosity (e.g., -vv is more than -v)")
 
     exp_args, other_args = exp_parser.parse_known_args()
+    seed_everything(exp_args.seed)
     if exp_args.verbosity == 1:
         level = logging.getLevelName('INFO')
     elif exp_args.verbosity >= 2:
@@ -75,7 +77,14 @@ def main():
     for k, v in vars(model_params).items():
         setattr(hparams, k, v)
 
-    trainer = Trainer.from_argparse_args(lightning_args)
+    callbacks = [ModelCheckpoint(
+        monitor='val/log p(z) - log q(z)',
+        save_top_k=3,
+        save_last=True,
+        mode='min',
+        filename='{epoch}-{val_loss:.2f}-{val/log p(z) - log q(z):.2f}'
+    )]
+    trainer = Trainer.from_argparse_args(lightning_args, callbacks=callbacks)
 
     model_dict = vars(model_params)
     model_dict['img_shape'] = args.crop_size
@@ -97,7 +106,6 @@ def main():
                 logger.info(f"Dropping parameter {k}")
         model.load_state_dict(new_state_dict, strict=False)
     experiment = exp_class(hparams, model)
-    seed_everything(exp_args.seed)
 
     warning_level = "once" if hparams.validate else "ignore"
     with warnings.catch_warnings():
