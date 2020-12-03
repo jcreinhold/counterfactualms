@@ -435,6 +435,8 @@ class SVIExperiment(BaseCovariateExperiment):
         metrics = self.get_trace_metrics(batch)
         for k, v in metrics.items():
             self.log('val/' + k, v, on_step=False, on_epoch=True)
+        # below is a temporary fix b/c fwd slash in metric creates directory in chkpt
+        self.log('klz', metrics['log p(z) - log q(z)'], on_step=False, on_epoch=True)
 
     def test_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)

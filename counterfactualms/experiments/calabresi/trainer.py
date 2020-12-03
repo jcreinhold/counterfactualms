@@ -78,18 +78,18 @@ def main():
         setattr(hparams, k, v)
 
     callbacks = [ModelCheckpoint(
-        monitor='val/log p(z) - log q(z)',
+        monitor='klz',
         save_top_k=3,
         save_last=True,
         mode='min',
-        filename='{epoch}-{val_loss:.2f}-{val/log p(z) - log q(z):.2f}'
+        filename='{epoch}-{val_loss:.2f}-{klz:.2f}'
     )]
     trainer = Trainer.from_argparse_args(lightning_args, callbacks=callbacks)
 
     model_dict = vars(model_params)
     model_dict['img_shape'] = args.crop_size
     model = model_class(**model_dict)
-    if exp_args.model_path is not None:
+    if exp_args.model_path != 'none':
         ckpt = torch.load(exp_args.model_path, map_location=torch.device('cpu'))
         state_dict = ckpt['state_dict']
         model_state_dict = model.state_dict()

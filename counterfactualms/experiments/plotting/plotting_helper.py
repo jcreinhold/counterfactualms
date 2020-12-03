@@ -2,6 +2,7 @@ from collections import OrderedDict
 from functools import partial
 import inspect
 import os
+import re
 import traceback
 import warnings
 
@@ -73,6 +74,21 @@ save_fmt = {
     'sex': lambda s: '{}'.format(['F', 'M'][int(s)]),
     'type': lambda s: '{}'.format(['HC', 'MS'][int(s)]),
 }
+
+
+def get_best_model(model_paths):
+    min_klz = np.inf
+    idx = None
+    model_paths = [mp for mp in model_paths if 'last' not in mp]
+    for i, mp in enumerate(model_paths):
+        ms = mp.split('=')[-2:]
+        ms = [re.sub('[^\d.-]+','', m) for m in ms]
+        val_loss = float(ms[0][:-1])
+        klz = float(ms[1][:-1])
+        if klz < min_klz:
+            min_klz = klz
+            idx = i
+    return model_paths[idx]
 
 
 def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2, use_gpu=True):
