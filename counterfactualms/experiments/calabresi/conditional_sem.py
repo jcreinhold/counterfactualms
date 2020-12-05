@@ -60,8 +60,8 @@ class ConditionalVISEM(BaseVISEM):
         age_base_dist = Normal(self.age_base_loc, self.age_base_scale).to_event(1)
         age_dist = TransformedDistribution(age_base_dist, self.age_flow_transforms)
         age = pyro.sample('age', age_dist)
-        age_ = self.age_flow_constraint_transforms.inv(age)
         _ = self.age_flow_components
+        age_ = self.age_flow_constraint_transforms.inv(age)
 
         brain_context = torch.cat([sex, age_], 1)
         brain_volume_base_dist = Normal(self.brain_volume_base_loc, self.brain_volume_base_scale).to_event(1)
@@ -105,12 +105,12 @@ class ConditionalVISEM(BaseVISEM):
     def model(self):
         obs = self.pgm_model()
 
-        ventricle_volume = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
-        brain_volume = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
-        lesion_volume = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
+        ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
+        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
+        lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
         z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
-        latent = torch.cat([z, ventricle_volume, brain_volume, lesion_volume], 1)
+        latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
         x_dist = self._get_transformed_x_dist(latent)
         x = pyro.sample('x', x_dist)
@@ -124,11 +124,11 @@ class ConditionalVISEM(BaseVISEM):
         with pyro.plate('observations', batch_size):
             hidden = self.encoder(obs['x'])
 
-            ventricle_volume = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
-            brain_volume = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
-            lesion_volume = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
+            ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
+            brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
+            lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
-            hidden = torch.cat([hidden, ventricle_volume, brain_volume, lesion_volume], 1)
+            hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
             latent_dist = self.latent_encoder.predict(hidden)
             z = pyro.sample('z', latent_dist)
 
