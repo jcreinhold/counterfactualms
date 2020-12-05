@@ -163,10 +163,6 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.brain_volume_range = brain_volumes.repeat(3).unsqueeze(1)
         ventricle_volumes = torch.linspace(10., 2500., 3, dtype=torch.float, device=self.torch_device)
         self.ventricle_volume_range = ventricle_volumes.repeat_interleave(3).unsqueeze(1)
-        lesion_volumes = torch.linspace(1e-5, 2000., 3, dtype=torch.float, device=self.torch_device)
-        self.lesion_volume_range = lesion_volumes.repeat_interleave(3).unsqueeze(1)
-        scores = torch.arange(-1., 6., dtype=torch.float, device=self.torch_device)
-        self.score_range = scores.repeat_interleave(3).unsqueeze(1)
         self.z_range = torch.randn([1, self.hparams.latent_dim], dtype=torch.float, device=self.torch_device).repeat((9, 1))
 
         age = torch.from_numpy(self.calabresi_train.csv['age'].to_numpy())
@@ -436,7 +432,6 @@ class BaseCovariateExperiment(pl.LightningModule):
 
             cond_data = {'brain_volume': self.brain_volume_range,
                          'ventricle_volume': self.ventricle_volume_range,
-                         'lesion_volume': self.lesion_volume_range,
                          'z': self.z_range}
             samples = pyro.condition(self.pyro_model.sample, data=cond_data)(9)['x']
             self.log_img_grid('cond_samples', samples.data, nrow=3)
