@@ -143,6 +143,7 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         if hparams.validate:
             pl.seed_everything(1337)
+            pyro.set_rng_seed(1337)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
             torch.autograd.set_detect_anomaly(self.hparams.validate)

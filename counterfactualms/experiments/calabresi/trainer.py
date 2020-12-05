@@ -5,6 +5,7 @@ import os
 import warnings
 import sys
 
+from pyro import set_rng_seed as pyro_set_rng_seed
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -28,6 +29,7 @@ def main():
 
     exp_args, other_args = exp_parser.parse_known_args()
     seed_everything(exp_args.seed)
+    pyro_set_rng_seed(exp_args.seed)
     if exp_args.verbosity == 1:
         level = logging.getLevelName('INFO')
     elif exp_args.verbosity >= 2:
