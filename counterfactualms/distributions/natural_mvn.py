@@ -139,6 +139,7 @@ def eval_grid(xx, yy, fcn):
 
 
 def plot_dist(xx, yy, dist: td.Distribution, data=None):
+    import matplotlib.pyplot as plt
     xlim = [xx.min(), xx.max()]
     ylim = [yy.min(), yy.max()]
     with torch.no_grad():
@@ -147,7 +148,6 @@ def plot_dist(xx, yy, dist: td.Distribution, data=None):
         else:
             zz = eval_grid(xx, yy, dist.log_prob)
     plt.imshow(zz.exp().T, interpolation='bilinear', origin='lower', extent=[*xlim, *ylim])
-    # plt.contourf(xx, yy, zz.exp(), cmap='viridis')
     if data is not None:
         plt.scatter(*data.T, c='k', s=4)
     plt.xlim(xlim)

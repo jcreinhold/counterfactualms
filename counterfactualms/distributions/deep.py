@@ -1,7 +1,7 @@
 import torch
 from pyro.distributions import (
     Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
-    Independent, MultivariateNormal, Normal, TorchDistribution
+    Independent, MultivariateNormal, Normal, TorchDistribution, MixtureOfDiagNormals
 )
 from torch import nn
 
@@ -57,6 +57,37 @@ class Conv3dIndepNormal(_DeepIndepNormal):
             backbone=backbone,
             mean_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1),
             logvar_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1)
+        )
+
+class _DeepIndepMixtureNormal(DeepConditional):
+    def __init__(self, backbone:nn.Module, mean_head:nn.ModuleList, logvar_head:nn.ModuleList, component_head:nn.Module):
+        super().__init__()
+        self.backbone = backbone
+        self.mean_head = mean_head
+        self.logvar_head = logvar_head
+        self.component_head = component_head
+
+    def forward(self, x):
+        h = self.backbone(x)
+        mean = torch.stack([mh(h) for mh in self.mean_head],1)
+        logvar = torch.stack([lh(h) for lh in self.logvar_head],1)
+        component = torch.log_softmax(self.component_head(h),1)
+        return mean, logvar, component
+
+    def predict(self, x) -> Independent:
+        mean, logvar, component = self(x)
+        std = (.5 * logvar).exp() + 1e-5
+        event_ndim = len(mean.shape[1:])  # keep only batch dimension
+        return MixtureOfDiagNormals(mean, std, component).to_event(event_ndim)
+
+
+class DeepIndepMixtureNormal(_DeepIndepMixtureNormal):
+    def __init__(self, backbone:nn.Module, hidden_dim:int, out_dim:int, n_comp:int=2):
+        super().__init__(
+            backbone=backbone,
+            mean_head=nn.ModuleList([nn.Linear(hidden_dim, out_dim) for _ in range(n_comp)]),
+            logvar_head=nn.ModuleList([nn.Linear(hidden_dim, out_dim) for _ in range(n_comp)]),
+            component_head=nn.Linear(hidden_dim, n_comp)
         )
 
 
