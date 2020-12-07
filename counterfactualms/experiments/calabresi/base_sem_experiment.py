@@ -53,7 +53,7 @@ class Lambda(torch.nn.Module):
 class BaseVISEM(BaseSEM):
     context_dim = 0  # number of context dimensions for decoder
 
-    def __init__(self, latent_dim:int, n_components:int=2, logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
+    def __init__(self, latent_dim:int, n_components:int=1, logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=2, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(192,192), **kwargs):
         super().__init__(**kwargs)
@@ -310,7 +310,7 @@ class BaseVISEM(BaseSEM):
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
         parser.add_argument('--latent-dim', default=100, type=int, help="latent dimension of model (default: %(default)s)")
-        parser.add_argument('--n-components', default=2, type=int, help="number of mixture components for vae (default: %(default)s)")
+        parser.add_argument('--n-components', default=1, type=int, help="number of mixture components for vae (default: %(default)s)")
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
         parser.add_argument('--enc-filters', default=[16,24,32,64,128], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
         parser.add_argument('--dec-filters', default=[128,64,32,24,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
@@ -374,7 +374,10 @@ class SVIExperiment(BaseCovariateExperiment):
                     fn = site['fn']
                     if isinstance(fn, Independent):
                         fn = fn.base_dist
-                    logging.info(f'{name}: {fn}')
+                    try:
+                        logging.info(f'{name}: {fn} - {fn.support}')
+                    except NotImplementedError:
+                        logging.info(f'{name}: {fn}')
                     log_prob_sum = site["log_prob_sum"]
                     is_obs = site["is_observed"]
                     logging.info(f'model - log p({name}) = {log_prob_sum} | obs={is_obs}')
@@ -391,7 +394,10 @@ class SVIExperiment(BaseCovariateExperiment):
                     fn = site['fn']
                     if isinstance(fn, Independent):
                         fn = fn.base_dist
-                    logging.info(f'{name}: {fn}')
+                    try:
+                        logging.info(f'{name}: {fn} - {fn.support}')
+                    except NotImplementedError:
+                        logging.info(f'{name}: {fn}')
                     entropy = site["score_parts"].entropy_term.sum()
                     is_obs = site["is_observed"]
                     logging.info(f'guide - log q({name}) = {entropy} | obs={is_obs}')
@@ -432,6 +438,7 @@ class SVIExperiment(BaseCovariateExperiment):
             raise ValueError('loss went to nan with metrics:\n{}'.format(metrics))
         for k, v in metrics.items():
             self.log('train/' + k, v, on_step=False, on_epoch=True)
+        self.log('klz', metrics['log p(z) - log q(z)'], on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -441,8 +448,7 @@ class SVIExperiment(BaseCovariateExperiment):
         metrics = self.get_trace_metrics(batch)
         for k, v in metrics.items():
             self.log('val/' + k, v, on_step=False, on_epoch=True)
-        # below is a temporary fix b/c fwd slash in metric creates directory in chkpt
-        self.log('klz', metrics['log p(z) - log q(z)'], on_step=False, on_epoch=True)
+        return metrics
 
     def test_step(self, batch, batch_idx):
         batch = self.prep_batch(batch)

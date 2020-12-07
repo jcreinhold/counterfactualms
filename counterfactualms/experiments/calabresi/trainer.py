@@ -80,11 +80,11 @@ def main():
         setattr(hparams, k, v)
 
     callbacks = [ModelCheckpoint(
-        monitor='klz',
-        save_top_k=3,
+        monitor='score',
+        save_top_k=10,
         save_last=True,
         mode='min',
-        filename='{epoch}-{val_loss:.2f}-{klz:.2f}'
+        filename='{epoch}-{klz:.2f}-{score:.2f}'
     )]
     trainer = Trainer.from_argparse_args(lightning_args, callbacks=callbacks)
 

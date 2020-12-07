@@ -228,7 +228,10 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         if self.current_epoch % self.hparams.sample_img_interval == 0:
-            self.sample_images()
+            mse = self.sample_images()
+            mse = mse / 1e7
+            klz = outputs['log p(z) - log q(z)'] / 1e2
+            self.log('score', mse+klz, on_step=False, on_epoch=True)
 
     def test_epoch_end(self, outputs):
         metrics = outputs['metrics']
@@ -375,7 +378,9 @@ class BaseCovariateExperiment(pl.LightningModule):
         x = obs['x']
         recon = self.pyro_model.reconstruct(obs, num_particles=self.hparams.num_sample_particles)
         self.log_img_grid(tag, torch.cat([x, recon], 0))
-        self.logger.experiment.add_scalar(f'{tag}/mse', torch.mean(torch.square(x - recon).sum((1, 2, 3))), self.current_epoch)
+        mse = torch.mean(torch.square(x - recon).sum((1, 2, 3)))
+        self.logger.experiment.add_scalar(f'{tag}/mse', mse, self.current_epoch)
+        return mse
 
     @property
     def required_data(self):
@@ -456,7 +461,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.log_img_grid('input', obs_batch['x'], save_img=True)
 
             if hasattr(self.pyro_model, 'reconstruct'):
-                self.build_reconstruction(obs_batch)
+                mse = self.build_reconstruction(obs_batch)
 
             conditions = {
                 '20': {'age': torch.zeros_like(obs_batch['age']) + 20},
@@ -500,13 +505,15 @@ class BaseCovariateExperiment(pl.LightningModule):
             }
             self.build_counterfactual('do(duration=x)', obs=obs_batch, conditions=conditions)
 
+            return mse
+
     @classmethod
     def add_arguments(cls, parser):
         parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--crop-size', default=(224,224), type=int, nargs=2, help="size of patch to take from image (default: %(default)s)")
-        parser.add_argument('--sample-img-interval', default=10, type=int, help="interval in which to sample and log images (default: %(default)s)")
+        parser.add_argument('--sample-img-interval', default=5, type=int, help="interval in which to sample and log images (default: %(default)s)")
         parser.add_argument('--train-batch-size', default=128, type=int, help="train batch size (default: %(default)s)")
         parser.add_argument('--test-batch-size', default=64, type=int, help="test batch size (default: %(default)s)")
         parser.add_argument('--validate', default=False, action='store_true', help="whether to validate (default: %(default)s)")
