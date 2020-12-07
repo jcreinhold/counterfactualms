@@ -77,17 +77,23 @@ save_fmt = {
 
 
 def get_best_model(model_paths):
+    min_score = np.inf
     min_klz = np.inf
     idx = None
     model_paths = [mp for mp in model_paths if 'last' not in mp]
     for i, mp in enumerate(model_paths):
         ms = mp.split('=')[-2:]
         ms = [re.sub('[^\d.-]+','', m) for m in ms]
-        val_loss = float(ms[0][:-1])
-        klz = float(ms[1][:-1])
-        if klz < min_klz:
+        klz = float(ms[0][:-1])
+        score = float(ms[1][:-1])
+        if score < min_score:
+            min_score = score
             min_klz = klz
             idx = i
+        elif score == min_score:
+            if klz < min_klz:
+                min_klz = klz
+                idx = i
     return model_paths[idx]
 
 
