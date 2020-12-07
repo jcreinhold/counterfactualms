@@ -20,7 +20,7 @@ from counterfactualms.arch.medical import Decoder, Encoder
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
 from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
 from counterfactualms.distributions.deep import (
-    DeepMultivariateNormal, DeepIndepNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
+    DeepMultivariateNormal, DeepIndepNormal, DeepIndepMixtureNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
 )
 from counterfactualms.experiments.calabresi.base_experiment import (
     BaseCovariateExperiment, BaseSEM, EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
@@ -53,13 +53,14 @@ class Lambda(torch.nn.Module):
 class BaseVISEM(BaseSEM):
     context_dim = 0  # number of context dimensions for decoder
 
-    def __init__(self, latent_dim:int, logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
+    def __init__(self, latent_dim:int, n_components:int=2, logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=2, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(192,192), **kwargs):
         super().__init__(**kwargs)
         img_shape_ = tuple([imsz//self.downsample for imsz in img_shape] if self.downsample > 0 else img_shape)
         self.img_shape = (1,) + img_shape_
         self.latent_dim = latent_dim
+        self.n_components = n_components
         self.logstd_init = logstd_init
         self.enc_filters = enc_filters
         self.dec_filters = dec_filters
@@ -142,7 +143,11 @@ class BaseVISEM(BaseSEM):
             torch.nn.Linear(self.latent_dim + self.context_dim, self.latent_dim),
             torch.nn.ReLU()
         )
-        self.latent_encoder = DeepIndepNormal(latent_layers, self.latent_dim, self.latent_dim)
+        if self.n_components > 1:
+            self.latent_encoder = DeepIndepMixtureNormal(
+                latent_layers, self.latent_dim, self.latent_dim, self.n_components)
+        else:
+            self.latent_encoder = DeepIndepNormal(latent_layers, self.latent_dim, self.latent_dim)
 
         # priors
         self.sex_logits = torch.nn.Parameter(torch.zeros([1, ]))
@@ -305,6 +310,7 @@ class BaseVISEM(BaseSEM):
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
         parser.add_argument('--latent-dim', default=100, type=int, help="latent dimension of model (default: %(default)s)")
+        parser.add_argument('--n-components', default=2, type=int, help="number of mixture components for vae (default: %(default)s)")
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
         parser.add_argument('--enc-filters', default=[16,24,32,64,128], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
         parser.add_argument('--dec-filters', default=[128,64,32,24,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
@@ -368,7 +374,7 @@ class SVIExperiment(BaseCovariateExperiment):
                     fn = site['fn']
                     if isinstance(fn, Independent):
                         fn = fn.base_dist
-                    logging.info(f'{name}: {fn} - {fn.support}')
+                    logging.info(f'{name}: {fn}')
                     log_prob_sum = site["log_prob_sum"]
                     is_obs = site["is_observed"]
                     logging.info(f'model - log p({name}) = {log_prob_sum} | obs={is_obs}')
@@ -385,7 +391,7 @@ class SVIExperiment(BaseCovariateExperiment):
                     fn = site['fn']
                     if isinstance(fn, Independent):
                         fn = fn.base_dist
-                    logging.info(f'{name}: {fn} - {fn.support}')
+                    logging.info(f'{name}: {fn}')
                     entropy = site["score_parts"].entropy_term.sum()
                     is_obs = site["is_observed"]
                     logging.info(f'guide - log q({name}) = {entropy} | obs={is_obs}')
