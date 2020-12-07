@@ -230,7 +230,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         if self.current_epoch % self.hparams.sample_img_interval == 0:
             mse = self.sample_images()
             mse = mse / 1e7
-            klz = outputs['log p(z) - log q(z)'] / 1e2
+            klz = outputs[0]['log p(z) - log q(z)'] / 1e2
             self.log('score', mse+klz, on_step=False, on_epoch=True)
 
     def test_epoch_end(self, outputs):
