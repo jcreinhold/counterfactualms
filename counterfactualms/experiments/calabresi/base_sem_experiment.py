@@ -374,7 +374,7 @@ class SVIExperiment(BaseCovariateExperiment):
                     fn = site['fn']
                     if isinstance(fn, Independent):
                         fn = fn.base_dist
-                    logging.info(f'{name}: {fn} - {fn.support}')
+                    logging.info(f'{name}: {fn}')
                     log_prob_sum = site["log_prob_sum"]
                     is_obs = site["is_observed"]
                     logging.info(f'model - log p({name}) = {log_prob_sum} | obs={is_obs}')
@@ -391,7 +391,7 @@ class SVIExperiment(BaseCovariateExperiment):
                     fn = site['fn']
                     if isinstance(fn, Independent):
                         fn = fn.base_dist
-                    logging.info(f'{name}: {fn} - {fn.support}')
+                    logging.info(f'{name}: {fn}')
                     entropy = site["score_parts"].entropy_term.sum()
                     is_obs = site["is_observed"]
                     logging.info(f'guide - log q({name}) = {entropy} | obs={is_obs}')

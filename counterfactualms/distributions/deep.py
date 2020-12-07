@@ -1,7 +1,8 @@
 import torch
 from pyro.distributions import (
     Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
-    Independent, MultivariateNormal, Normal, TorchDistribution, MixtureOfDiagNormals
+    Independent, MultivariateNormal, Normal, TorchDistribution,
+    MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance
 )
 from torch import nn
 
@@ -66,19 +67,24 @@ class _DeepIndepMixtureNormal(DeepConditional):
         self.mean_head = mean_head
         self.logvar_head = logvar_head
         self.component_head = component_head
+        def _init_normal(m):
+            if type(m) == nn.Linear:
+                nn.init.normal_(m.weight, 0., 0.02)
+                nn.init.constant_(m.bias, 0.)
+        self.apply(_init_normal)
 
     def forward(self, x):
         h = self.backbone(x)
         mean = torch.stack([mh(h) for mh in self.mean_head],1)
-        logvar = torch.stack([lh(h) for lh in self.logvar_head],1)
-        component = torch.log_softmax(self.component_head(h),1)
+        logvar = self.logvar_head(h)
+        component = self.component_head(h)
         return mean, logvar, component
 
     def predict(self, x) -> Independent:
         mean, logvar, component = self(x)
-        std = (.5 * logvar).exp() + 1e-5
-        event_ndim = len(mean.shape[1:])  # keep only batch dimension
-        return MixtureOfDiagNormals(mean, std, component).to_event(event_ndim)
+        std = (0.5 * logvar).exp() + 1e-5
+        event_ndim = 0
+        return MixtureOfDiagNormalsSharedCovariance(mean, std, component).to_event(event_ndim)
 
 
 class DeepIndepMixtureNormal(_DeepIndepMixtureNormal):
@@ -86,7 +92,7 @@ class DeepIndepMixtureNormal(_DeepIndepMixtureNormal):
         super().__init__(
             backbone=backbone,
             mean_head=nn.ModuleList([nn.Linear(hidden_dim, out_dim) for _ in range(n_comp)]),
-            logvar_head=nn.ModuleList([nn.Linear(hidden_dim, out_dim) for _ in range(n_comp)]),
+            logvar_head=nn.Linear(hidden_dim, out_dim),
             component_head=nn.Linear(hidden_dim, n_comp)
         )
 
