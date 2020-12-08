@@ -3,7 +3,7 @@ from torch import nn
 
 
 class Encoder(nn.Module):
-    def __init__(self, num_convolutions=1, filters=(16,32,64,128), latent_dim:int=128, input_size=(1,224,224)):
+    def __init__(self, num_convolutions=1, filters=(16,32,64,128), latent_dim:int=100, input_size=(1,224,224)):
         super().__init__()
 
         self.num_convolutions = num_convolutions

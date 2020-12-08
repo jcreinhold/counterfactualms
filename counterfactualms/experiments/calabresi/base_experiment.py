@@ -26,9 +26,9 @@ MODEL_REGISTRY = {}
 
 
 class BaseSEM(PyroModule):
-    def __init__(self, preprocessing:str='realnvp', downsample:int=-1):
+    def __init__(self, preprocessing:str='realnvp', resize:int=-1):
         super().__init__()
-        self.downsample = downsample
+        self.resize = resize
         self.preprocessing = preprocessing
 
     def _get_preprocess_transforms(self):
@@ -122,7 +122,7 @@ class BaseSEM(PyroModule):
     @classmethod
     def add_arguments(cls, parser):
         parser.add_argument('--preprocessing', default='realnvp', type=str, help="type of preprocessing (default: %(default)s)", choices=['realnvp', 'glow'])
-        parser.add_argument('--downsample', default=2, type=int, help="downsampling factor (-1 for none) (default: %(default)s)")
+        parser.add_argument('--resize', default=(128,128), type=int, nargs=2, help="resize cropped image to this size (use 0,0 for no resize) (default: %(default)s)")
         return parser
 
 
@@ -148,12 +148,12 @@ class BaseCovariateExperiment(pl.LightningModule):
             pyro.enable_validation()
 
     def prepare_data(self):
-        downsample = None if self.hparams.downsample == -1 else self.hparams.downsample
+        resize = None if self.hparams.resize == (0,0) else self.hparams.resize
         train_crop_type = self.hparams.train_crop_type if hasattr(self.hparams, 'train_crop_type') else 'random'
         crop_size = self.hparams.crop_size if hasattr(self.hparams, 'crop_size') else (224, 224)
-        self.calabresi_train = CalabresiDataset(self.hparams.train_csv, crop_size=crop_size, crop_type=train_crop_type, downsample=downsample)  # noqa: E501
-        self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_size=crop_size, crop_type='center', downsample=downsample)
-        self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_size=crop_size, crop_type='center', downsample=downsample)
+        self.calabresi_train = CalabresiDataset(self.hparams.train_csv, crop_size=crop_size, crop_type=train_crop_type, resize=resize)  # noqa: E501
+        self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_size=crop_size, crop_type='center', resize=resize)
+        self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_size=crop_size, crop_type='center', resize=resize)
 
         self.torch_device = self.trainer.root_gpu if self.trainer.on_gpu else self.trainer.root_device
 

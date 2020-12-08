@@ -59,11 +59,10 @@ class BaseVISEM(BaseSEM):
     def __init__(self, latent_dim:int, prior_components:int=1, posterior_components:int=1,
                  logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=2, use_upconv:bool=False,
-                 decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(192,192),
+                 decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, **kwargs):
         super().__init__(**kwargs)
-        img_shape_ = tuple([imsz//self.downsample for imsz in img_shape] if self.downsample > 0 else img_shape)
-        self.img_shape = (1,) + img_shape_
+        self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
         self.prior_components = prior_components
         self.posterior_components = posterior_components

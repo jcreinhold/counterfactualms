@@ -7,7 +7,7 @@ import torchvision as tv
 
 
 class CalabresiDataset(Dataset):
-    def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), downsample:int=None, eps:float=1e-5):
+    def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), resize=None, eps:float=1e-5):
         super().__init__()
         self.csv_path = csv_path
         csv = pd.read_csv(csv_path)
@@ -44,8 +44,7 @@ class CalabresiDataset(Dataset):
         self.csv = csv
         self.crop_type = crop_type
         self.crop_size = crop_size
-        self.downsample = downsample
-        self.resize = None if downsample is None else [cs // downsample for cs in self.crop_size]
+        self.resize = resize
 
     def __len__(self):
         return len(self.csv)

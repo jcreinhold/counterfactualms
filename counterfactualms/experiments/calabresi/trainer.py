@@ -89,7 +89,7 @@ def main():
     trainer = Trainer.from_argparse_args(lightning_args, callbacks=callbacks)
 
     model_dict = vars(model_params)
-    model_dict['img_shape'] = args.crop_size
+    model_dict['img_shape'] = args.resize if args.resize is not (0,0) else args.crop_size
     model = model_class(**model_dict)
     if exp_args.model_path != 'none':
         ckpt = torch.load(exp_args.model_path, map_location=torch.device('cpu'))

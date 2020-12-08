@@ -7,7 +7,7 @@ from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
 
 
 class Encoder(nn.Module):
-    def __init__(self, filters=(16,32,64,128), latent_dim:int=128, input_size=(1,224,224),
+    def __init__(self, filters=(16,32,64,128), latent_dim:int=100, input_size=(1,224,224),
                  arch='res_mbconv'):
         super().__init__()
 
