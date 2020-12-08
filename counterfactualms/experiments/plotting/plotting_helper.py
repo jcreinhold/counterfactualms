@@ -23,7 +23,7 @@ diff_cm = 'seismic'
 
 from counterfactualms.datasets.calabresi import CalabresiDataset
 
-downsample = None
+resize = None
 crop_size = None
 calabresi_test = None
 n_rot90 = 0
@@ -97,7 +97,7 @@ def get_best_model(model_paths):
     return model_paths[idx]
 
 
-def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2, use_gpu=True):
+def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True):
     """ run this first with paths to models corresponding to experiments """
     if isinstance(model_paths, str):
         model_paths = [model_paths]
@@ -130,10 +130,10 @@ def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2, use
             loaded_models[exp] = loaded_model.to(device)
             global crop_size
             crop_size = exp_crop_size
-            global downsample
-            downsample = exp_downsample
+            global resize
+            resize = exp_resize
             global calabresi_test
-            calabresi_test = CalabresiDataset(csv_path, crop_type='center', downsample=downsample, crop_size=crop_size)
+            calabresi_test = CalabresiDataset(csv_path, crop_type='center', resize=resize, crop_size=crop_size)
             def sample_pgm(num_samples, model):
                 with pyro.plate('observations', num_samples):
                     return model.pgm_model()
@@ -231,8 +231,7 @@ def interactive_plot(model_name):
         x = np.clip(x, 0., 255.)
         x = x.astype(np.uint8)
         x = Image.fromarray(x)
-        sz = [downsample*s for s in x.size]
-        x = x.resize(sz, resample=Image.BILINEAR)
+        x = x.resize(resize, resample=Image.BILINEAR)
         return x
 
     def plot_intervention(intervention, idx, num_samples=32, save_image_dir='', save=False):
