@@ -1,6 +1,8 @@
 import pyro
 from pyro.nn import pyro_method, DenseNN
-from pyro.distributions import Normal, Bernoulli, Uniform, TransformedDistribution # noqa: F401
+from pyro.distributions import (
+    Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
+)
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 import torch
 
@@ -109,7 +111,12 @@ class ConditionalVISEM(BaseVISEM):
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
         lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
-        z = pyro.sample('z', Normal(self.z_loc, self.z_scale).to_event(1))
+        if self.prior_components > 1:
+            _, _, _ = self.z_loc, self.z_scale, self.z_components
+            z_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, self.z_scale, self.z_components).to_event(1)
+        else:
+            z_dist = Normal(self.z_loc, self.z_scale).to_event(1)
+        z = pyro.sample('z', z_dist)
         latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
         x_dist = self._get_transformed_x_dist(latent)

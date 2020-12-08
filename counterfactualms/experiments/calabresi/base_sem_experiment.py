@@ -17,6 +17,9 @@ import torch
 from torch.distributions import Independent
 
 from counterfactualms.arch.medical import Decoder, Encoder
+from counterfactualms.arch.nvae import Decoder as NDecoder
+from counterfactualms.arch.nvae import Encoder as NEncoder
+from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
 from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
 from counterfactualms.distributions.deep import (
@@ -53,14 +56,17 @@ class Lambda(torch.nn.Module):
 class BaseVISEM(BaseSEM):
     context_dim = 0  # number of context dimensions for decoder
 
-    def __init__(self, latent_dim:int, n_components:int=1, logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
+    def __init__(self, latent_dim:int, prior_components:int=1, posterior_components:int=1,
+                 logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=2, use_upconv:bool=False,
-                 decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(192,192), **kwargs):
+                 decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(192,192),
+                 use_nvae=False, **kwargs):
         super().__init__(**kwargs)
         img_shape_ = tuple([imsz//self.downsample for imsz in img_shape] if self.downsample > 0 else img_shape)
         self.img_shape = (1,) + img_shape_
         self.latent_dim = latent_dim
-        self.n_components = n_components
+        self.prior_components = prior_components
+        self.posterior_components = posterior_components
         self.logstd_init = logstd_init
         self.enc_filters = enc_filters
         self.dec_filters = dec_filters
@@ -68,12 +74,19 @@ class BaseVISEM(BaseSEM):
         self.use_upconv = use_upconv
         self.decoder_type = decoder_type
         self.decoder_cov_rank = decoder_cov_rank
+        self.use_nvae = use_nvae
 
         # decoder parts
-        decoder = Decoder(
-            num_convolutions=self.num_convolutions, filters=self.dec_filters,
-            latent_dim=self.latent_dim + self.context_dim, upconv=self.use_upconv,
-            output_size=self.img_shape)
+        if use_nvae:
+            decoder = NDecoder(
+                filters=self.dec_filters,
+                latent_dim=self.latent_dim + self.context_dim,
+                output_size=self.img_shape)
+        else:
+            decoder = Decoder(
+                num_convolutions=self.num_convolutions, filters=self.dec_filters,
+                latent_dim=self.latent_dim + self.context_dim, upconv=self.use_upconv,
+                output_size=self.img_shape)
 
         if self.decoder_type == 'fixed_var':
             self.decoder = Conv2dIndepNormal(decoder, 1, 1)
@@ -132,22 +145,39 @@ class BaseVISEM(BaseSEM):
             raise ValueError(f'unknown decoder type {self.decoder_type}.')
 
         # encoder parts
-        self.encoder = Encoder(
-            num_convolutions=self.num_convolutions,
-            filters=self.enc_filters,
-            latent_dim=self.latent_dim,
-            input_size=self.img_shape
-        )
+        if self.use_nvae:
+            self.encoder = NEncoder(
+                filters=self.enc_filters,
+                latent_dim=self.latent_dim,
+                input_size=self.img_shape
+            )
+        else:
+            self.encoder = Encoder(
+                num_convolutions=self.num_convolutions,
+                filters=self.enc_filters,
+                latent_dim=self.latent_dim,
+                input_size=self.img_shape
+            )
 
         latent_layers = torch.nn.Sequential(
             torch.nn.Linear(self.latent_dim + self.context_dim, self.latent_dim),
-            torch.nn.ReLU()
+            torch.nn.ReLU() if not self.use_nvae else BatchNormSwish(self.latent_dim)
         )
-        if self.n_components > 1:
+
+        if self.posterior_components > 1:
             self.latent_encoder = DeepIndepMixtureNormal(
-                latent_layers, self.latent_dim, self.latent_dim, self.n_components)
+                latent_layers, self.latent_dim, self.latent_dim, self.posterior_components)
         else:
             self.latent_encoder = DeepIndepNormal(latent_layers, self.latent_dim, self.latent_dim)
+
+        if self.prior_components > 1:
+            self.z_loc = torch.nn.Parameter(torch.randn([self.prior_components, self.latent_dim]))
+            self.z_scale = torch.nn.Parameter(torch.randn([self.latent_dim]).exp()+1e-5)
+            self.z_components = torch.nn.Parameter(((1/self.prior_components)*torch.ones([self.prior_components])).log())
+        else:
+            self.register_buffer('z_loc', torch.zeros([latent_dim, ], requires_grad=False))
+            self.register_buffer('z_scale', torch.ones([latent_dim, ], requires_grad=False))
+            self.z_components = None
 
         # priors
         self.sex_logits = torch.nn.Parameter(torch.zeros([1, ]))
@@ -158,9 +188,6 @@ class BaseVISEM(BaseSEM):
 
         self.register_buffer('x_base_loc', torch.zeros(self.img_shape, requires_grad=False))
         self.register_buffer('x_base_scale', torch.ones(self.img_shape, requires_grad=False))
-
-        self.register_buffer('z_loc', torch.zeros([latent_dim, ], requires_grad=False))
-        self.register_buffer('z_scale', torch.ones([latent_dim, ], requires_grad=False))
 
         for k in self.required_data - {'sex', 'x'}:
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
@@ -310,12 +337,14 @@ class BaseVISEM(BaseSEM):
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
         parser.add_argument('--latent-dim', default=100, type=int, help="latent dimension of model (default: %(default)s)")
-        parser.add_argument('--n-components', default=1, type=int, help="number of mixture components for vae (default: %(default)s)")
+        parser.add_argument('--prior-components', default=1, type=int, help="number of mixture components for prior (default: %(default)s)")
+        parser.add_argument('--posterior-components', default=1, type=int, help="number of mixture components for posterior (default: %(default)s)")
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
         parser.add_argument('--enc-filters', default=[16,24,32,64,128], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
         parser.add_argument('--dec-filters', default=[128,64,32,24,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
         parser.add_argument('--num-convolutions', default=3, type=int, help="number of convolutions in each layer (default: %(default)s)")
         parser.add_argument('--use-upconv', default=False, action='store_true', help="use upsample->conv instead of transpose conv (default: %(default)s)")
+        parser.add_argument('--use-nvae', default=False, action='store_true', help="use nvae instead of standard vae (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
             choices=['fixed_var', 'learned_var', 'independent_gaussian', 'sharedvar_multivariate_gaussian',

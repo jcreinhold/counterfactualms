@@ -15,10 +15,14 @@ class Encoder(nn.Module):
         cur_channels = 1
         for c in filters:
             for _ in range(0, num_convolutions - 1):
-                layers += [nn.Conv2d(cur_channels, c, 3, 1, 1), nn.BatchNorm2d(c), nn.LeakyReLU(.1, inplace=True)]
+                layers += [nn.Conv2d(cur_channels, c, 3, 1, 1),
+                           nn.BatchNorm2d(c, momentum=0.05),
+                           nn.LeakyReLU(.1, inplace=True)]
                 cur_channels = c
 
-            layers += [nn.Conv2d(cur_channels, c, 4, 2, 1), nn.BatchNorm2d(c), nn.LeakyReLU(.1, inplace=True)]
+            layers += [nn.Conv2d(cur_channels, c, 4, 2, 1),
+                       nn.BatchNorm2d(c, momentum=0.05),
+                       nn.LeakyReLU(.1, inplace=True)]
 
             cur_channels = c
 
@@ -61,7 +65,9 @@ class Decoder(nn.Module):
         cur_channels = filters[0]
         for c in filters[1:]:
             for _ in range(0, num_convolutions - 1):
-                layers += [nn.Conv2d(cur_channels, cur_channels, 3, 1, 1), nn.BatchNorm2d(cur_channels), nn.LeakyReLU(.1, inplace=True)]
+                layers += [nn.Conv2d(cur_channels, cur_channels, 3, 1, 1),
+                           nn.BatchNorm2d(cur_channels, momentum=0.05),
+                           nn.LeakyReLU(.1, inplace=True)]
 
             if upconv:
                 layers += [
@@ -70,7 +76,8 @@ class Decoder(nn.Module):
                 ]
             else:
                 layers += [nn.ConvTranspose2d(cur_channels, c, kernel_size=4, stride=2, padding=1)]
-            layers += [nn.BatchNorm2d(c), nn.LeakyReLU(.1, inplace=True)]
+            layers += [nn.BatchNorm2d(c, momentum=0.05),
+                       nn.LeakyReLU(.1, inplace=True)]
 
             cur_channels = c
 
