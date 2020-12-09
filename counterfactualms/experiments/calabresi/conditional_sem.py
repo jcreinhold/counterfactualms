@@ -57,7 +57,7 @@ class ConditionalVISEM(BaseVISEM):
         sex_dist = Bernoulli(logits=self.sex_logits).to_event(1)
         # pseudo call to register with pyro
         _ = self.sex_logits
-        sex = pyro.sample('sex', sex_dist)
+        sex = pyro.sample('sex', sex_dist, infer=dict(baseline={'use_decaying_avg_baseline': True}))
 
         age_base_dist = Normal(self.age_base_loc, self.age_base_scale).to_event(1)
         age_dist = TransformedDistribution(age_base_dist, self.age_flow_transforms)
