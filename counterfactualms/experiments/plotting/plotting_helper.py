@@ -113,7 +113,7 @@ def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128),
                                                      or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
                                                      or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
             }
-            model_params['img_shape'] = hparams['resize']
+            model_params['img_shape'] = hparams['resize'] if 'resize' in hparams else exp_resize
             new_state_dict = OrderedDict()
             for key, value in ckpt['state_dict'].items():
                 new_key = key.replace('pyro_model.', '')
