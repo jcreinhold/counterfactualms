@@ -445,7 +445,7 @@ class SVIExperiment(BaseCovariateExperiment):
         x = batch['image'] * 255.
         x = x.float()
         if self.training:
-            x += torch.rand_like(x)
+            x += self.hparams.noise_std * torch.rand_like(x)
         out = dict(x=x)
         for k in self.required_data:
             if k in batch:
@@ -497,6 +497,7 @@ class SVIExperiment(BaseCovariateExperiment):
         parser.add_argument(
             '--cf-elbo-type', default=-1, choices=[-1, 0, 1, 2],
             help="-1: randomly select per batch, 0: shuffle thickness, 1: shuffle intensity, 2: shuffle both (default: %(default)s)")
+        parser.add_argument('--noise-std', default=1., type=float, help="add noise with this std in training (default: %(default)s)")
         return parser
 
 
