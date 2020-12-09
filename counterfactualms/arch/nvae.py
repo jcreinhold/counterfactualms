@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn.utils import spectral_norm
 
 from counterfactualms.arch.thirdparty.utils import get_arch_cells
-from counterfactualms.arch.thirdparty.neural_operations import Swish, Conv2D
+from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.arch.thirdparty.cells import Cell
 from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
 
@@ -72,7 +72,7 @@ class Decoder(nn.Module):
             layers += [Cell(cur_channels, c, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = c
 
-        layers += [nn.Sequential(Swish(), spectral_norm(Conv2D(cur_channels, 1, 1, 1)))]
+        layers += [nn.Sequential(Swish(), spectral_norm(nn.Conv2d(cur_channels, 1, 1, 1)))]
 
         self.cnn = nn.Sequential(*layers)
 

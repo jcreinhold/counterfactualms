@@ -7,6 +7,7 @@
 
 import torch
 import torch.nn as nn
+from torch.nn import Conv2d
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch.nn.utils import spectral_norm
@@ -44,7 +45,7 @@ def get_skip_connection(Cin, Cout, stride):
     elif stride == 2:
         return FactorizedReduce(Cin, Cout)
     elif stride == -1:
-        return nn.Sequential(UpSample(), Conv2D(Cin, Cout, kernel_size=1))
+        return nn.Sequential(UpSample(), Conv2d(Cin, Cout, kernel_size=1))
 
 
 def norm(t, dim):
@@ -73,66 +74,6 @@ def normalize_weight_jit(log_weight_norm, weight):
     wn = torch.sqrt(torch.sum(weight * weight, dim=[1, 2, 3]))   # norm(w)
     weight = n * weight / (wn.view(-1, 1, 1, 1) + 1e-5)
     return weight
-
-
-class Conv2D(nn.Conv2d):
-    """Allows for weights as input."""
-
-    def __init__(self, C_in, C_out, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=False, data_init=False,
-                 weight_norm=True):
-        """
-        Args:
-            use_shared (bool): Use weights for this layer or not?
-        """
-        super(Conv2D, self).__init__(C_in, C_out, kernel_size, stride, padding, dilation, groups, bias)
-
-        self.log_weight_norm = None
-        if weight_norm:
-            init = norm(self.weight, dim=[1, 2, 3]).view(-1, 1, 1, 1)
-            self.log_weight_norm = nn.Parameter(torch.log(init + 1e-2), requires_grad=True)
-
-        self.data_init = data_init
-        self.init_done = False
-        self.weight_normalized = self.normalize_weight()
-
-    def forward(self, x):
-        """
-        Args:
-            x (torch.Tensor): of size (B, C_in, H, W).
-            params (ConvParam): containing `weight` and `bias` (optional) of conv operation.
-        """
-        # do data based initialization
-        if self.data_init and not self.init_done:
-            with torch.no_grad():
-                weight = self.weight / (norm(self.weight, dim=[1, 2, 3]).view(-1, 1, 1, 1) + 1e-5)
-                bias = None
-                out = F.conv2d(x, weight, bias, self.stride, self.padding, self.dilation, self.groups)
-                mn = torch.mean(out, dim=[0, 2, 3])
-                st = 5 * torch.std(out, dim=[0, 2, 3])
-
-                # get mn and st from other GPUs
-                average_tensor(mn, is_distributed=True)
-                average_tensor(st, is_distributed=True)
-
-                if self.bias is not None:
-                    self.bias.data = - mn / (st + 1e-5)
-                self.log_weight_norm.data = -torch.log((st.view(-1, 1, 1, 1) + 1e-5))
-                self.init_done = True
-
-        self.weight_normalized = self.normalize_weight()
-
-        bias = self.bias
-        return F.conv2d(x, self.weight_normalized, bias, self.stride,
-                        self.padding, self.dilation, self.groups)
-
-    def normalize_weight(self):
-        """ applies weight normalization """
-        if self.log_weight_norm is not None:
-            weight = normalize_weight_jit(self.log_weight_norm, self.weight)
-        else:
-            weight = self.weight
-
-        return weight
 
 
 class Identity(nn.Module):
@@ -168,8 +109,7 @@ class ELUConv(nn.Module):
         super(ELUConv, self).__init__()
         self.upsample = stride == -1
         stride = abs(stride)
-        self.conv_0 = Conv2D(C_in, C_out, kernel_size, stride=stride, padding=padding, bias=True, dilation=dilation,
-                             data_init=True)
+        self.conv_0 = Conv2d(C_in, C_out, kernel_size, stride=stride, padding=padding, bias=True, dilation=dilation)
 
     def forward(self, x):
         out = F.elu(x)
@@ -185,7 +125,7 @@ class BNELUConv(nn.Module):
         self.upsample = stride == -1
         stride = abs(stride)
         self.bn = get_batchnorm(C_in, eps=BN_EPS, momentum=0.05)
-        self.conv_0 = Conv2D(C_in, C_out, kernel_size, stride=stride, padding=padding, bias=True, dilation=dilation)
+        self.conv_0 = Conv2d(C_in, C_out, kernel_size, stride=stride, padding=padding, bias=True, dilation=dilation)
 
     def forward(self, x):
         x = self.bn(x)
@@ -204,7 +144,7 @@ class BNSwishConv(nn.Module):
         self.upsample = stride == -1
         stride = abs(stride)
         self.bn_act = BatchNormSwish(C_in, eps=BN_EPS, momentum=0.05)
-        self.conv_0 = Conv2D(C_in, C_out, kernel_size, stride=stride, padding=padding, bias=True, dilation=dilation)
+        self.conv_0 = Conv2d(C_in, C_out, kernel_size, stride=stride, padding=padding, bias=True, dilation=dilation)
         self.use_spectral_norm = spectral_norm
         if use_spectral_norm:
             self.conv_0 = spectral_norm(self.conv_0)
@@ -226,10 +166,10 @@ class FactorizedReduce(nn.Module):
     def __init__(self, C_in, C_out, use_spectral_norm=True):
         super(FactorizedReduce, self).__init__()
         assert C_out % 2 == 0
-        self.conv_1 = Conv2D(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
-        self.conv_2 = Conv2D(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
-        self.conv_3 = Conv2D(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
-        self.conv_4 = Conv2D(C_in, C_out - 3 * (C_out // 4), 1, stride=2, padding=0, bias=True)
+        self.conv_1 = Conv2d(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
+        self.conv_2 = Conv2d(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
+        self.conv_3 = Conv2d(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
+        self.conv_4 = Conv2d(C_in, C_out - 3 * (C_out // 4), 1, stride=2, padding=0, bias=True)
         self.use_spectral_norm = spectral_norm
         if use_spectral_norm:
             self.conv_1 = spectral_norm(self.conv_1)
@@ -261,7 +201,7 @@ class EncCombinerCell(nn.Module):
         super(EncCombinerCell, self).__init__()
         self.cell_type = cell_type
         # Cin = Cin1 + Cin2
-        self.conv = Conv2D(Cin2, Cout, kernel_size=1, stride=1, padding=0, bias=True)
+        self.conv = Conv2d(Cin2, Cout, kernel_size=1, stride=1, padding=0, bias=True)
 
     def forward(self, x1, x2):
         x2 = self.conv(x2)
@@ -274,7 +214,7 @@ class DecCombinerCell(nn.Module):
     def __init__(self, Cin1, Cin2, Cout, cell_type):
         super(DecCombinerCell, self).__init__()
         self.cell_type = cell_type
-        self.conv = Conv2D(Cin1 + Cin2, Cout, kernel_size=1, stride=1, padding=0, bias=True)
+        self.conv = Conv2d(Cin1 + Cin2, Cout, kernel_size=1, stride=1, padding=0, bias=True)
 
     def forward(self, x1, x2):
         out = torch.cat([x1, x2], dim=1)
@@ -287,7 +227,7 @@ class ConvBNSwish(nn.Module):
         padding = dilation * (k - 1) // 2
         super(ConvBNSwish, self).__init__()
 
-        conv = Conv2D(Cin, Cout, k, stride, padding, groups=groups, bias=False, dilation=dilation, weight_norm=False)
+        conv = Conv2d(Cin, Cout, k, stride, padding, groups=groups, bias=False, dilation=dilation)
         if use_spectral_norm:
             conv = spectral_norm(conv)
         self.conv = nn.Sequential(
@@ -326,7 +266,7 @@ class InvertedResidual(nn.Module):
         self.stride = abs(self.stride)
         groups = hidden_dim if g == 0 else g
 
-        conv = Conv2D(hidden_dim, Cout, 1, 1, 0, bias=False, weight_norm=False)
+        conv = Conv2d(hidden_dim, Cout, 1, 1, 0, bias=False)
         if use_spectral_norm:
             conv = spectral_norm(conv)
         layers0 = [nn.UpsamplingNearest2d(scale_factor=2)] if self.upsample else []
