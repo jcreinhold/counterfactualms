@@ -61,7 +61,7 @@ class Conv3dIndepNormal(_DeepIndepNormal):
         )
 
 class _DeepIndepMixtureNormal(DeepConditional):
-    def __init__(self, backbone:nn.Module, mean_head:nn.ModuleList, logvar_head:nn.ModuleList, component_head:nn.Module):
+    def __init__(self, backbone:nn.Module, mean_head:nn.ModuleList, logvar_head:nn.Module, component_head:nn.Module):
         super().__init__()
         self.backbone = backbone
         self.mean_head = mean_head
@@ -83,6 +83,7 @@ class _DeepIndepMixtureNormal(DeepConditional):
     def predict(self, x) -> Independent:
         mean, logvar, component = self(x)
         std = (0.5 * logvar).exp() + 1e-5
+        component = torch.log_softmax(component, dim=-1)
         event_ndim = 0
         return MixtureOfDiagNormalsSharedCovariance(mean, std, component).to_event(event_ndim)
 
