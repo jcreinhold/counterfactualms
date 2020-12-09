@@ -11,7 +11,7 @@ from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, SigmoidTransform, Spline
 )
 from pyro.distributions import (
-    LowRankMultivariateNormal, MultivariateNormal, Normal, TransformedDistribution  # noqa: F401
+    LowRankMultivariateNormal, MultivariateNormal, Normal, Laplace, TransformedDistribution  # noqa: F401
 )
 import torch
 from torch.distributions import Independent
@@ -60,7 +60,8 @@ class BaseVISEM(BaseSEM):
                  logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
-                 use_nvae=False, use_weight_norm=False, use_spectral_norm=False, eps=1e-2, **kwargs):
+                 use_nvae=False, use_weight_norm=False, use_spectral_norm=False, laplace_likelihood=False,
+                 eps=1e-2, **kwargs):
         super().__init__(**kwargs)
         self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
@@ -76,6 +77,7 @@ class BaseVISEM(BaseSEM):
         self.use_nvae = use_nvae
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
+        self.laplace_likelihood = laplace_likelihood
         self.eps = eps
 
         # decoder parts
@@ -248,7 +250,10 @@ class BaseVISEM(BaseSEM):
 
     def _get_transformed_x_dist(self, latent):
         x_pred_dist = self.decoder.predict(latent)  # returns a normal dist with mean of the predicted image
-        x_base_dist = Normal(self.x_base_loc, self.x_base_scale).to_event(3)  # 3 dimensions starting from right dep.
+        if self.laplace_likelihood:
+            x_base_dist = Laplace(self.x_base_loc, self.x_base_scale).to_event(3)
+        else:
+            x_base_dist = Normal(self.x_base_loc, self.x_base_scale).to_event(3)  # 3 dimensions starting from right dep.
 
         preprocess_transform = self._get_preprocess_transforms()
 
@@ -360,6 +365,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--use-nvae', default=False, action='store_true', help="use nvae instead of standard vae (default: %(default)s)")
         parser.add_argument('--use-weight-norm', default=False, action='store_true', help="use weight norm in conv layers (not w/ nvae) (default: %(default)s)")
         parser.add_argument('--use-spectral-norm', default=False, action='store_true', help="use spectral norm in conv layers (not w/ nvae) (default: %(default)s)")
+        parser.add_argument('--laplace-likelihood', default=False, action='store_true', help="use laplace likelihood for image (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
             choices=['fixed_var', 'learned_var', 'independent_gaussian', 'sharedvar_multivariate_gaussian',
