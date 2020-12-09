@@ -60,7 +60,7 @@ class BaseVISEM(BaseSEM):
                  logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
-                 use_nvae=False, use_weight_norm=False, use_spectral_norm=False, **kwargs):
+                 use_nvae=False, use_weight_norm=False, use_spectral_norm=False, eps=1e-2, **kwargs):
         super().__init__(**kwargs)
         self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
@@ -76,6 +76,7 @@ class BaseVISEM(BaseSEM):
         self.use_nvae = use_nvae
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
+        self.eps = eps
 
         # decoder parts
         if use_nvae:
@@ -216,13 +217,16 @@ class BaseVISEM(BaseSEM):
         self.brain_volume_flow_constraint_transforms = ComposeTransform([self.brain_volume_flow_lognorm, ExpTransform()])
 
         self.lesion_volume_flow_lognorm = AffineTransform(loc=self.lesion_volume_flow_lognorm_loc.item(), scale=self.lesion_volume_flow_lognorm_scale.item())
-        self.lesion_volume_flow_constraint_transforms = ComposeTransform([self.lesion_volume_flow_lognorm, ExpTransform()])
+        self.lesion_volume_flow_eps = AffineTransform(loc=-eps, scale=1.)
+        self.lesion_volume_flow_constraint_transforms = ComposeTransform([self.lesion_volume_flow_lognorm, ExpTransform(), self.lesion_volume_flow_eps])
 
         self.duration_flow_lognorm = AffineTransform(loc=self.duration_flow_lognorm_loc.item(), scale=self.duration_flow_lognorm_scale.item())
-        self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_lognorm, ExpTransform()])
+        self.duration_flow_eps = AffineTransform(loc=-eps, scale=1.)
+        self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_lognorm, ExpTransform(), self.duration_flow_eps])
 
         self.score_flow_lognorm = AffineTransform(loc=self.score_flow_lognorm_loc.item(), scale=self.score_flow_lognorm_scale.item())
-        self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform()])
+        self.score_flow_eps = AffineTransform(loc=-eps, scale=1.)
+        self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform(), self.score_flow_eps])
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)

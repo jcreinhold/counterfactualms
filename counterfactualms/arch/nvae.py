@@ -2,6 +2,7 @@ import numpy as np
 from torch import nn
 
 from counterfactualms.arch.layers import Conv2d
+from counterfactualms.arch.thirdparty.neural_operations import ConvBNSwish
 from counterfactualms.arch.thirdparty.utils import get_arch_cells
 from counterfactualms.arch.thirdparty.cells import Cell
 from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
@@ -66,7 +67,9 @@ class Decoder(nn.Module):
         layers = []
 
         cur_channels = filters[0]
-        filters = tuple(filters) + (filters[-1],)
+        cell_type = 'up_post'
+        arch = self.arch_instance[cell_type]
+        layers += [Cell(cur_channels, cur_channels, cell_type=cell_type, arch=arch, use_se=True)]
         for c in filters[1:]:
             cell_type = 'normal_post'
             arch = self.arch_instance[cell_type]
@@ -77,7 +80,7 @@ class Decoder(nn.Module):
             layers += [Cell(cur_channels, c, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = c
 
-        layers += [Conv2d(cur_channels, 1, 1, 1)]
+        layers += [ConvBNSwish(cur_channels, cur_channels), Conv2d(cur_channels, 1, 1, 1)]
 
         self.cnn = nn.Sequential(*layers)
 

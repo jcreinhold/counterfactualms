@@ -18,10 +18,10 @@ class CalabresiDataset(Dataset):
         csv['treatment'] = csv['treatment'].map({
             np.nan: -1., 'none': 0., 'glatiramer acetate': 1.,
             'interferon beta': 2., 'natalizumab': 3., 'other': 4.})
-        csv['duration'] = csv['duration'].fillna(0.) + eps
-        csv['edss'] = csv['edss'].fillna(0.) + eps
-        csv['msss'] = csv['msss'].fillna(0.) + eps
-        csv['fss'] = csv['fss'].fillna(0.) + eps
+        csv['duration'] = csv['duration'].fillna(0.)
+        csv['edss'] = csv['edss'].fillna(0.)
+        csv['msss'] = csv['msss'].fillna(0.)
+        csv['fss'] = csv['fss'].fillna(0.)
         n_exist = (((~csv['fss'].isnull()).astype(int)) +
                    ((~csv['msss'].isnull()).astype(int)) +
                    ((~csv['edss'].isnull()).astype(int)))
@@ -29,12 +29,12 @@ class CalabresiDataset(Dataset):
         csv['score'] = (csv['edss'] + csv['msss'] + csv['fss']) / n_exist
         csv['sex'] = csv['sex'].map({'M': 0., 'F': 1.})
         csv['type'] = csv['type'].map({'HC': 0., 'RRMS': 1., 'SPMS': 1., 'PPMS': 1.})
-        csv['slice_ventricle_volume'] = csv['slice_ventricle_volume'].astype(np.float32) + eps
-        csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32) + eps
-        csv['slice_brain_volume'] = csv['slice_brain_volume'].astype(np.float32) + eps
-        csv['brain_volume'] = csv['brain_volume'].astype(np.float32) + eps
-        csv['slice_lesion_volume'] = csv['slice_lesion_volume'].astype(np.float32).fillna(0.) + eps
-        csv['lesion_volume'] = csv['lesion_volume'].astype(np.float32).fillna(0.) + eps
+        csv['slice_ventricle_volume'] = csv['slice_ventricle_volume'].astype(np.float32)
+        csv['ventricle_volume'] = csv['ventricle_volume'].astype(np.float32)
+        csv['slice_brain_volume'] = csv['slice_brain_volume'].astype(np.float32)
+        csv['brain_volume'] = csv['brain_volume'].astype(np.float32)
+        csv['slice_lesion_volume'] = csv['slice_lesion_volume'].astype(np.float32).fillna(0.)
+        csv['lesion_volume'] = csv['lesion_volume'].astype(np.float32).fillna(0.)
         csv['slice_number'] = csv['slice_number'].astype(np.float32)
         if csv.isnull().values.any():
             raise ValueError(

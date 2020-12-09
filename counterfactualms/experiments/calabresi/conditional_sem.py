@@ -32,7 +32,7 @@ class ConditionalVISEM(BaseVISEM):
         ]
 
         # lesion_volume flow
-        lesion_volume_net = DenseNN(4, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        lesion_volume_net = DenseNN(4, [16, 32], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.lesion_volume_flow_components = ConditionalAffineTransform(context_nn=lesion_volume_net, event_dim=0)
         self.lesion_volume_flow_transforms = [
             self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
