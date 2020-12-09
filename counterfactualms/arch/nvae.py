@@ -9,8 +9,8 @@ from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
 
 
 class Encoder(nn.Module):
-    def __init__(self, filters=(16,32,64,128), latent_dim:int=100,
-                 input_size=(1,224,224), arch='res_mbconv'):
+    def __init__(self, num_convolutions=3, filters=(16,32,64,128,256), latent_dim:int=100,
+                 input_size=(1,128,128), arch='res_mbconv'):
         super().__init__()
 
         self.filters = filters
@@ -23,10 +23,13 @@ class Encoder(nn.Module):
         n_resolutions = len(filters)
         filters = (filters[0],) + tuple(filters)
         layers += [Conv2d(1, filters[0], 3, padding=1, use_weight_norm=False)]
+        cur_channels = filters[0]
         for ci, co in zip(filters, filters[1:]):
             cell_type = 'normal_pre'
             arch = self.arch_instance[cell_type]
-            layers += [Cell(ci, ci, cell_type=cell_type, arch=arch, use_se=True)]
+            for _ in range(0, num_convolutions - 1):
+                layers += [Cell(cur_channels, ci, cell_type=cell_type, arch=arch, use_se=True)]
+                cur_channels = ci
             cell_type = 'down_pre'
             arch = self.arch_instance[cell_type]
             layers += [Cell(ci, co, cell_type=cell_type, arch=arch, use_se=True)]
@@ -48,8 +51,8 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, filters=(128,64,32,16), latent_dim:int=128,
-                 output_size=(1,192,192), arch='res_mbconv'):
+    def __init__(self, num_convolutions=3, filters=(256,128,64,32,16), latent_dim:int=100,
+                 output_size=(1,128,128), arch='res_mbconv'):
         super().__init__()
 
         self.filters = filters
@@ -57,23 +60,25 @@ class Decoder(nn.Module):
         self.arch_instance = get_arch_cells(arch)
         self.arch = arch
 
-        self.intermediate_shape = np.array(output_size) // (2 ** (len(filters) - 1))
+        self.intermediate_shape = np.array(output_size) // (2 ** len(filters))
         self.intermediate_shape[0] = filters[0]
         self.fc = nn.Linear(latent_dim, np.prod(self.intermediate_shape), bias=False)
 
         layers = []
 
         cur_channels = filters[0]
+        filters = filters + (filters[-1],)
         for c in filters[1:]:
             cell_type = 'normal_post'
             arch = self.arch_instance[cell_type]
-            layers += [Cell(cur_channels, cur_channels, cell_type=cell_type, arch=arch, use_se=True)]
+            for _ in range(0, num_convolutions - 1):
+                layers += [Cell(cur_channels, cur_channels, cell_type=cell_type, arch=arch, use_se=True)]
             cell_type = 'up_post'
             arch = self.arch_instance[cell_type]
             layers += [Cell(cur_channels, c, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = c
 
-        layers += [nn.Sequential(Swish(), Conv2d(cur_channels, 1, 1, 1))]
+        layers += [Conv2d(cur_channels, 1, 1, 1)]
 
         self.cnn = nn.Sequential(*layers)
 

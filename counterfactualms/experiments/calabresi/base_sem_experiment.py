@@ -58,7 +58,7 @@ class BaseVISEM(BaseSEM):
 
     def __init__(self, latent_dim:int, prior_components:int=1, posterior_components:int=1,
                  logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
-                 dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=2, use_upconv:bool=False,
+                 dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, **kwargs):
         super().__init__(**kwargs)
@@ -78,7 +78,7 @@ class BaseVISEM(BaseSEM):
         # decoder parts
         if use_nvae:
             decoder = NDecoder(
-                filters=self.dec_filters,
+                num_convolutions=self.num_convolutions, filters=self.dec_filters,
                 latent_dim=self.latent_dim + self.context_dim,
                 output_size=self.img_shape)
         else:
@@ -146,6 +146,7 @@ class BaseVISEM(BaseSEM):
         # encoder parts
         if self.use_nvae:
             self.encoder = NEncoder(
+                num_convolutions=self.num_convolutions,
                 filters=self.enc_filters,
                 latent_dim=self.latent_dim,
                 input_size=self.img_shape
