@@ -19,7 +19,7 @@ from torch.distributions import Independent
 from counterfactualms.arch.medical import Decoder, Encoder
 from counterfactualms.arch.nvae import Decoder as NDecoder
 from counterfactualms.arch.nvae import Encoder as NEncoder
-from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
+from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
 from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
 from counterfactualms.distributions.deep import (
@@ -160,7 +160,7 @@ class BaseVISEM(BaseSEM):
 
         latent_layers = torch.nn.Sequential(
             torch.nn.Linear(self.latent_dim + self.context_dim, self.latent_dim),
-            torch.nn.ReLU() if not self.use_nvae else BatchNormSwish(self.latent_dim)
+            torch.nn.ReLU() if not self.use_nvae else Swish()
         )
 
         if self.posterior_components > 1:

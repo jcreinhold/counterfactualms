@@ -1,14 +1,16 @@
 import numpy as np
 from torch import nn
+from torch.nn.utils import spectral_norm
 
 from counterfactualms.arch.thirdparty.utils import get_arch_cells
+from counterfactualms.arch.thirdparty.neural_operations import Swish, Conv2D
 from counterfactualms.arch.thirdparty.cells import Cell
 from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
 
 
 class Encoder(nn.Module):
-    def __init__(self, filters=(16,32,64,128), latent_dim:int=100, input_size=(1,224,224),
-                 arch='res_mbconv'):
+    def __init__(self, filters=(16,32,64,128), latent_dim:int=100,
+                 input_size=(1,224,224), arch='res_mbconv'):
         super().__init__()
 
         self.filters = filters
@@ -21,10 +23,12 @@ class Encoder(nn.Module):
         n_resolutions = len(filters)
         filters = (1,) + tuple(filters)
         for ci, co in zip(filters, filters[1:]):
-            arch = self.arch_instance['normal_pre']
-            layers += [Cell(ci, ci, cell_type='normal_pre', arch=arch, use_se=True)]
-            arch = self.arch_instance['down_pre']
-            layers += [Cell(ci, co, cell_type='down_pre', arch=arch, use_se=True)]
+            cell_type = 'normal_enc'
+            arch = self.arch_instance[cell_type]
+            layers += [Cell(ci, ci, cell_type=cell_type, arch=arch, use_se=True)]
+            cell_type = 'down_enc'
+            arch = self.arch_instance[cell_type]
+            layers += [Cell(ci, co, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = co
 
         self.cnn = nn.Sequential(*layers)
@@ -54,22 +58,21 @@ class Decoder(nn.Module):
 
         self.intermediate_shape = np.array(output_size) // (2 ** (len(filters) - 1))
         self.intermediate_shape[0] = filters[0]
-        self.fc = nn.Sequential(
-            nn.Linear(latent_dim, np.prod(self.intermediate_shape)),
-            BatchNormSwish(np.prod(self.intermediate_shape), momentum=0.05)
-        )
+        self.fc = nn.Linear(latent_dim, np.prod(self.intermediate_shape), bias=False)
 
         layers = []
 
         cur_channels = filters[0]
         for c in filters[1:]:
-            arch = self.arch_instance['normal_post']
-            layers += [Cell(cur_channels, cur_channels, cell_type='normal_post', arch=arch, use_se=True)]
-            arch = self.arch_instance['up_post']
-            layers += [Cell(cur_channels, c, cell_type='up_post', arch=arch, use_se=True)]
+            cell_type = 'normal_dec'
+            arch = self.arch_instance[cell_type]
+            layers += [Cell(cur_channels, cur_channels, cell_type=cell_type, arch=arch, use_se=True)]
+            cell_type = 'up_dec'
+            arch = self.arch_instance[cell_type]
+            layers += [Cell(cur_channels, c, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = c
 
-        layers += [nn.Conv2d(cur_channels, 1, 1, 1)]
+        layers += [nn.Sequential(Swish(), spectral_norm(Conv2D(cur_channels, 1, 1, 1)))]
 
         self.cnn = nn.Sequential(*layers)
 
