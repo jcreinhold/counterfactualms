@@ -7,10 +7,9 @@
 
 import torch
 import torch.nn as nn
-from torch.nn import Conv2d
 import torch.nn.functional as F
 import torch.distributed as dist
-from torch.nn.utils import spectral_norm
+from torch.nn.utils import spectral_norm, weight_norm
 
 from counterfactualms.arch.thirdparty.swish import Swish as SwishFN
 from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
@@ -37,6 +36,36 @@ def average_tensor(t, is_distributed):
         size = float(dist.get_world_size())
         dist.all_reduce(t.data, op=dist.ReduceOp.SUM)
         t.data /= size
+
+
+class Conv2d(nn.Module):
+    def __init__(self, *args, use_weight_norm=True, use_spectral_norm=False, **kwargs):
+        super().__init__()
+        self.conv = nn.Conv2d(*args, **kwargs)
+        self.use_weight_norm = use_weight_norm
+        self.use_spectral_norm = use_spectral_norm
+        if use_weight_norm:
+            self.conv = weight_norm(self.conv)
+        if use_spectral_norm:
+            self.conv = spectral_norm(self.conv)
+
+    def forward(self, x):
+        return self.conv(x)
+
+    def _norm_str(self):
+        norm = ''
+        if self.use_weight_norm:
+            norm +=  f', weight_norm={self.use_weight_norm}'
+        if self. use_spectral_norm:
+            norm += f', spectral_norm={self.use_spectral_norm}'
+        norm += ')'
+        return norm
+
+    def __repr__(self):
+        return self.conv.__repr__()[:-1] + self._norm_str()
+
+    def __str__(self):
+        return self.conv.__str__()[:-1] + self._norm_str()
 
 
 def get_skip_connection(Cin, Cout, stride):
@@ -139,15 +168,12 @@ class BNELUConv(nn.Module):
 class BNSwishConv(nn.Module):
     """ReLU + Conv2d + BN."""
 
-    def __init__(self, C_in, C_out, kernel_size, stride=1, padding=0, dilation=1, use_spectral_norm=True):
+    def __init__(self, C_in, C_out, kernel_size, stride=1, padding=0, dilation=1):
         super(BNSwishConv, self).__init__()
         self.upsample = stride == -1
         stride = abs(stride)
         self.bn_act = BatchNormSwish(C_in, eps=BN_EPS, momentum=0.05)
         self.conv_0 = Conv2d(C_in, C_out, kernel_size, stride=stride, padding=padding, bias=True, dilation=dilation)
-        self.use_spectral_norm = spectral_norm
-        if use_spectral_norm:
-            self.conv_0 = spectral_norm(self.conv_0)
 
     def forward(self, x):
         """
@@ -163,19 +189,13 @@ class BNSwishConv(nn.Module):
 
 
 class FactorizedReduce(nn.Module):
-    def __init__(self, C_in, C_out, use_spectral_norm=True):
+    def __init__(self, C_in, C_out):
         super(FactorizedReduce, self).__init__()
         assert C_out % 2 == 0
         self.conv_1 = Conv2d(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
         self.conv_2 = Conv2d(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
         self.conv_3 = Conv2d(C_in, C_out // 4, 1, stride=2, padding=0, bias=True)
         self.conv_4 = Conv2d(C_in, C_out - 3 * (C_out // 4), 1, stride=2, padding=0, bias=True)
-        self.use_spectral_norm = spectral_norm
-        if use_spectral_norm:
-            self.conv_1 = spectral_norm(self.conv_1)
-            self.conv_2 = spectral_norm(self.conv_2)
-            self.conv_3 = spectral_norm(self.conv_3)
-            self.conv_4 = spectral_norm(self.conv_4)
 
     def forward(self, x):
         out = act(x)
@@ -223,15 +243,12 @@ class DecCombinerCell(nn.Module):
 
 
 class ConvBNSwish(nn.Module):
-    def __init__(self, Cin, Cout, k=3, stride=1, groups=1, dilation=1, use_spectral_norm=True):
+    def __init__(self, Cin, Cout, k=3, stride=1, groups=1, dilation=1):
         padding = dilation * (k - 1) // 2
         super(ConvBNSwish, self).__init__()
 
-        conv = Conv2d(Cin, Cout, k, stride, padding, groups=groups, bias=False, dilation=dilation)
-        if use_spectral_norm:
-            conv = spectral_norm(conv)
         self.conv = nn.Sequential(
-            conv,
+            Conv2d(Cin, Cout, k, stride, padding, groups=groups, bias=False, dilation=dilation),
             BatchNormSwish(Cout, eps=BN_EPS, momentum=0.05)  # drop in replacement for BN + Swish
         )
 
@@ -255,7 +272,7 @@ class SE(nn.Module):
 
 
 class InvertedResidual(nn.Module):
-    def __init__(self, Cin, Cout, stride, ex, dil, k, g, use_spectral_norm=True):
+    def __init__(self, Cin, Cout, stride, ex, dil, k, g):
         super(InvertedResidual, self).__init__()
         self.stride = stride
         assert stride in [1, 2, -1]
@@ -266,14 +283,11 @@ class InvertedResidual(nn.Module):
         self.stride = abs(self.stride)
         groups = hidden_dim if g == 0 else g
 
-        conv = Conv2d(hidden_dim, Cout, 1, 1, 0, bias=False)
-        if use_spectral_norm:
-            conv = spectral_norm(conv)
         layers0 = [nn.UpsamplingNearest2d(scale_factor=2)] if self.upsample else []
         layers = [get_batchnorm(Cin, eps=BN_EPS, momentum=0.05),
                   ConvBNSwish(Cin, hidden_dim, k=1),
                   ConvBNSwish(hidden_dim, hidden_dim, stride=self.stride, groups=groups, k=k, dilation=dil),
-                  conv,
+                  Conv2d(hidden_dim, Cout, 1, 1, 0, bias=False),
                   get_batchnorm(Cout, momentum=0.05)]
 
         layers0.extend(layers)
