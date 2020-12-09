@@ -5,7 +5,7 @@ import numpy as np
 import pyro
 from pyro.infer import SVI, TraceGraph_ELBO
 from pyro.nn import pyro_method
-from pyro.optim import Adam  # noqa: F401
+from pyro.optim import ClippedAdam
 from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, SigmoidTransform, Spline
@@ -383,7 +383,8 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def _build_svi(self, loss=None):
         def per_param_callable(module_name, param_name):
-            params = {'eps': 1e-5, 'amsgrad': self.hparams.use_amsgrad, 'weight_decay': self.hparams.l2}
+            params = {'eps': 1e-5, 'weight_decay': self.hparams.l2,
+                      'clip_norm': self.hparams.clip_norm, 'lrd': self.hparams.lrd}
             if 'flow_components' in module_name or 'sex_logits' in param_name:
                 params['lr'] = self.hparams.pgm_lr
             else:
@@ -397,9 +398,9 @@ class SVIExperiment(BaseCovariateExperiment):
         if self.hparams.use_cf_guide:
             def guide(*args, **kwargs):
                 return self.pyro_model.counterfactual_guide(*args, **kwargs, counterfactual_type=self.hparams.cf_elbo_type)
-            self.svi = SVI(self.pyro_model.svi_model, guide, Adam(per_param_callable), loss)
+            self.svi = SVI(self.pyro_model.svi_model, guide, ClippedAdam(per_param_callable), loss)
         else:
-            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, Adam(per_param_callable), loss)
+            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, ClippedAdam(per_param_callable), loss)
         self.svi.loss_class = loss
 
     def backward(self, *args, **kwargs):

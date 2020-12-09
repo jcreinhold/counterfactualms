@@ -520,6 +520,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         parser.add_argument('--lr', default=1e-4, type=float, help="lr of deep part (default: %(default)s)")
         parser.add_argument('--pgm-lr', default=2.5e-3, type=float, help="lr of pgm (default: %(default)s)")
         parser.add_argument('--l2', default=1e-5, type=float, help="weight decay (default: %(default)s)")
-        parser.add_argument('--use-amsgrad', default=False, action='store_true', help="use amsgrad? (default: %(default)s)")
+        parser.add_argument('--clip-norm', default=10., type=float, help="clip norm for grad (default: %(default)s)")
+        parser.add_argument('--lrd', default=0.998, type=float, help="learning rate decay (default: %(default)s)")
         parser.add_argument('--train-crop-type', default='random', choices=['random', 'center'], help="how to crop training images (default: %(default)s)")
         return parser

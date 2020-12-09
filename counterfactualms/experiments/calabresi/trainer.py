@@ -60,9 +60,6 @@ def main():
         os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpus)
         args.gpus = 1
 
-    # TODO: push to lightning
-    args.gradient_clip_val = float(args.gradient_clip_val)
-
     groups = {}
     for group in parser._action_groups:
         group_dict = {a.dest: getattr(args, a.dest, None) for a in group._group_actions}
