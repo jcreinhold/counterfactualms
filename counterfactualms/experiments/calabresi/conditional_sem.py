@@ -112,7 +112,6 @@ class ConditionalVISEM(BaseVISEM):
         lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
         if self.prior_components > 1:
-            _, _ = self.z_loc, self.z_components
             z_scale = (0.5 * self.z_scale).exp() + 1e-5  # z_scale parameter is logvar
             z_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
         else:
