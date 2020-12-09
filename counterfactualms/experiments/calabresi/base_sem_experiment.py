@@ -60,7 +60,7 @@ class BaseVISEM(BaseSEM):
                  logstd_init:float=-5, enc_filters:Tuple[int]=(16,32,64,128),
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
-                 use_nvae=False, **kwargs):
+                 use_nvae=False, use_weight_norm=False, use_spectral_norm=False, **kwargs):
         super().__init__(**kwargs)
         self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
@@ -74,18 +74,24 @@ class BaseVISEM(BaseSEM):
         self.decoder_type = decoder_type
         self.decoder_cov_rank = decoder_cov_rank
         self.use_nvae = use_nvae
+        self.use_weight_norm = use_weight_norm
+        self.use_spectral_norm = use_spectral_norm
 
         # decoder parts
         if use_nvae:
             decoder = NDecoder(
                 num_convolutions=self.num_convolutions, filters=self.dec_filters,
                 latent_dim=self.latent_dim + self.context_dim,
-                output_size=self.img_shape)
+                output_size=self.img_shape
+            )
         else:
             decoder = Decoder(
                 num_convolutions=self.num_convolutions, filters=self.dec_filters,
                 latent_dim=self.latent_dim + self.context_dim, upconv=self.use_upconv,
-                output_size=self.img_shape)
+                output_size=self.img_shape,
+                use_weight_norm=self.use_weight_norm,
+                use_spectral_norm=self.use_spectral_norm
+            )
 
         if self.decoder_type == 'fixed_var':
             self.decoder = Conv2dIndepNormal(decoder, 1, 1)
@@ -156,7 +162,9 @@ class BaseVISEM(BaseSEM):
                 num_convolutions=self.num_convolutions,
                 filters=self.enc_filters,
                 latent_dim=self.latent_dim,
-                input_size=self.img_shape
+                input_size=self.img_shape,
+                use_weight_norm=self.use_weight_norm,
+                use_spectral_norm = self.use_spectral_norm
             )
 
         latent_layers = torch.nn.Sequential(
@@ -340,11 +348,13 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--prior-components', default=1, type=int, help="number of mixture components for prior (default: %(default)s)")
         parser.add_argument('--posterior-components', default=1, type=int, help="number of mixture components for posterior (default: %(default)s)")
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
-        parser.add_argument('--enc-filters', default=[16,24,32,64,128], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
-        parser.add_argument('--dec-filters', default=[128,64,32,24,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
+        parser.add_argument('--enc-filters', default=[16,32,64,128,256], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
+        parser.add_argument('--dec-filters', default=[256,128,64,32,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
         parser.add_argument('--num-convolutions', default=3, type=int, help="number of convolutions in each layer (default: %(default)s)")
         parser.add_argument('--use-upconv', default=False, action='store_true', help="use upsample->conv instead of transpose conv (default: %(default)s)")
         parser.add_argument('--use-nvae', default=False, action='store_true', help="use nvae instead of standard vae (default: %(default)s)")
+        parser.add_argument('--use-weight-norm', default=False, action='store_true', help="use weight norm in conv layers (not w/ nvae) (default: %(default)s)")
+        parser.add_argument('--use-spectral-norm', default=False, action='store_true', help="use spectral norm in conv layers (not w/ nvae) (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
             choices=['fixed_var', 'learned_var', 'independent_gaussian', 'sharedvar_multivariate_gaussian',

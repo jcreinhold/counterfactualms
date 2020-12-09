@@ -1,9 +1,8 @@
 import numpy as np
 from torch import nn
-from torch.nn.utils import spectral_norm
 
+from counterfactualms.arch.layers import Conv2d
 from counterfactualms.arch.thirdparty.utils import get_arch_cells
-from counterfactualms.arch.thirdparty.neural_operations import Swish, Conv2d
 from counterfactualms.arch.thirdparty.cells import Cell
 from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
 

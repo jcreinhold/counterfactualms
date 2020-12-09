@@ -9,10 +9,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
-from torch.nn.utils import spectral_norm, weight_norm
 
 from counterfactualms.arch.thirdparty.swish import Swish as SwishFN
 from counterfactualms.arch.thirdparty.batchnormswish import BatchNormSwish
+from counterfactualms.arch.layers import Conv2d
 
 from collections import OrderedDict
 
@@ -36,36 +36,6 @@ def average_tensor(t, is_distributed):
         size = float(dist.get_world_size())
         dist.all_reduce(t.data, op=dist.ReduceOp.SUM)
         t.data /= size
-
-
-class Conv2d(nn.Module):
-    def __init__(self, *args, use_weight_norm=True, use_spectral_norm=False, **kwargs):
-        super().__init__()
-        self.conv = nn.Conv2d(*args, **kwargs)
-        self.use_weight_norm = use_weight_norm
-        self.use_spectral_norm = use_spectral_norm
-        if use_weight_norm:
-            self.conv = weight_norm(self.conv)
-        if use_spectral_norm:
-            self.conv = spectral_norm(self.conv)
-
-    def forward(self, x):
-        return self.conv(x)
-
-    def _norm_str(self):
-        norm = ''
-        if self.use_weight_norm:
-            norm +=  f', weight_norm={self.use_weight_norm}'
-        if self. use_spectral_norm:
-            norm += f', spectral_norm={self.use_spectral_norm}'
-        norm += ')'
-        return norm
-
-    def __repr__(self):
-        return self.conv.__repr__()[:-1] + self._norm_str()
-
-    def __str__(self):
-        return self.conv.__str__()[:-1] + self._norm_str()
 
 
 def get_skip_connection(Cin, Cout, stride):
