@@ -67,7 +67,7 @@ class Decoder(nn.Module):
         layers = []
 
         cur_channels = filters[0]
-        filters = filters + (filters[-1],)
+        filters = tuple(filters) + (filters[-1],)
         for c in filters[1:]:
             cell_type = 'normal_post'
             arch = self.arch_instance[cell_type]
