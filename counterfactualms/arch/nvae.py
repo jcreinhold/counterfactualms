@@ -24,10 +24,10 @@ class Encoder(nn.Module):
         filters = (filters[0],) + tuple(filters)
         layers += [Conv2d(1, filters[0], 3, padding=1, use_weight_norm=False)]
         for ci, co in zip(filters, filters[1:]):
-            cell_type = 'normal_enc'
+            cell_type = 'normal_pre'
             arch = self.arch_instance[cell_type]
             layers += [Cell(ci, ci, cell_type=cell_type, arch=arch, use_se=True)]
-            cell_type = 'down_enc'
+            cell_type = 'down_pre'
             arch = self.arch_instance[cell_type]
             layers += [Cell(ci, co, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = co
@@ -65,10 +65,10 @@ class Decoder(nn.Module):
 
         cur_channels = filters[0]
         for c in filters[1:]:
-            cell_type = 'normal_dec'
+            cell_type = 'normal_post'
             arch = self.arch_instance[cell_type]
             layers += [Cell(cur_channels, cur_channels, cell_type=cell_type, arch=arch, use_se=True)]
-            cell_type = 'up_dec'
+            cell_type = 'up_post'
             arch = self.arch_instance[cell_type]
             layers += [Cell(cur_channels, c, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = c
