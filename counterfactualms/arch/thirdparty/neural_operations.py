@@ -248,7 +248,7 @@ class ConvBNSwish(nn.Module):
         super(ConvBNSwish, self).__init__()
 
         self.conv = nn.Sequential(
-            Conv2d(Cin, Cout, k, stride, padding, groups=groups, bias=False, dilation=dilation),
+            Conv2d(Cin, Cout, k, stride, padding, groups=groups, bias=False, dilation=dilation, use_weight_norm=False),
             BatchNormSwish(Cout, eps=BN_EPS, momentum=0.05)  # drop in replacement for BN + Swish
         )
 
@@ -287,7 +287,7 @@ class InvertedResidual(nn.Module):
         layers = [get_batchnorm(Cin, eps=BN_EPS, momentum=0.05),
                   ConvBNSwish(Cin, hidden_dim, k=1),
                   ConvBNSwish(hidden_dim, hidden_dim, stride=self.stride, groups=groups, k=k, dilation=dil),
-                  Conv2d(hidden_dim, Cout, 1, 1, 0, bias=False),
+                  Conv2d(hidden_dim, Cout, 1, 1, 0, bias=False, use_weight_norm=False),
                   get_batchnorm(Cout, momentum=0.05)]
 
         layers0.extend(layers)
