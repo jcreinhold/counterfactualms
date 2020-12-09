@@ -181,7 +181,8 @@ class BaseVISEM(BaseSEM):
         if self.prior_components > 1:
             self.z_loc = torch.nn.Parameter(torch.randn([self.prior_components, self.latent_dim]))
             self.z_scale = torch.nn.Parameter(torch.randn([self.latent_dim]).clamp(min=-1.,max=None))  # log scale
-            self.z_components = torch.nn.Parameter(((1/self.prior_components)*torch.ones([self.prior_components])).log())
+            self.register_buffer('z_components',  # don't be bayesian about the mixture components
+                ((1/self.prior_components)*torch.ones([self.prior_components], requires_grad=False)).log())
         else:
             self.register_buffer('z_loc', torch.zeros([latent_dim, ], requires_grad=False))
             self.register_buffer('z_scale', torch.ones([latent_dim, ], requires_grad=False))
