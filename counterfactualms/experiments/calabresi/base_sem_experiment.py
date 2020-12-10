@@ -491,6 +491,7 @@ class SVIExperiment(BaseCovariateExperiment):
         loss = self.svi.step(batch, annealing_factor=annealing_factor)
         loss = torch.as_tensor(loss)
         self.log('train_loss', loss, on_step=False, on_epoch=True)
+        self.log('annealing_factor', annealing_factor, on_step=False, on_epoch=True)
         metrics = self.get_trace_metrics(batch)
         if np.isnan(loss):
             self.logger.experiment.add_text('nan', f'nand at {self.current_epoch}:\n{metrics}')
