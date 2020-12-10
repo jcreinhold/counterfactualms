@@ -383,7 +383,8 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def _build_svi(self, loss=None):
         def per_param_callable(module_name, param_name):
-            params = {'eps': 1e-5, 'weight_decay': self.hparams.l2,
+            params = {'weight_decay': self.hparams.weight_decay,
+                      'betas': self.hparams.betas, 'eps': 1e-5,
                       'clip_norm': self.hparams.clip_norm, 'lrd': self.hparams.lrd}
             if 'flow_components' in module_name or 'sex_logits' in param_name:
                 params['lr'] = self.hparams.pgm_lr
