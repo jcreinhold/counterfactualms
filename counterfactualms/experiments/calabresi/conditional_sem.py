@@ -117,7 +117,7 @@ class ConditionalVISEM(BaseVISEM):
             z_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
         else:
             z_dist = Normal(self.z_loc, self.z_scale).to_event(1)
-        with poutine.scale(None, annealing_factor):
+        with poutine.scale(scale=annealing_factor):
             z = pyro.sample('z', z_dist)
         latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
@@ -139,7 +139,7 @@ class ConditionalVISEM(BaseVISEM):
 
             hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
             latent_dist = self.latent_encoder.predict(hidden)
-            with poutine.scale(None, annealing_factor):
+            with poutine.scale(scale=annealing_factor):
                 z = pyro.sample('z', latent_dist)
 
         return z
