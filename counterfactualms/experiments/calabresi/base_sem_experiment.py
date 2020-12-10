@@ -477,11 +477,18 @@ class SVIExperiment(BaseCovariateExperiment):
         return out
 
     def training_step(self, batch, batch_idx):
+        if self.hparams.annealing_epochs > 0 and self.current_epoch < self.hparams.annealing_epochs:
+            min_af = self.hparams.min_annealing_factor
+            annealing_factor = min_af + (1.0 - min_af) * \
+                               (float(self.current_epoch + 1) /
+                                float(self.hparams.annealing_epochs))
+        else:
+            annealing_factor = 1.0
         batch = self.prep_batch(batch)
         if self.hparams.validate:
             logging.info('Validation:')
             self.print_trace_updates(batch)
-        loss = self.svi.step(batch)
+        loss = self.svi.step(batch, annealing_factor=annealing_factor)
         loss = torch.as_tensor(loss)
         self.log('train_loss', loss, on_step=False, on_epoch=True)
         metrics = self.get_trace_metrics(batch)
@@ -522,6 +529,8 @@ class SVIExperiment(BaseCovariateExperiment):
             '--cf-elbo-type', default=-1, choices=[-1, 0, 1, 2],
             help="-1: randomly select per batch, 0: shuffle thickness, 1: shuffle intensity, 2: shuffle both (default: %(default)s)")
         parser.add_argument('--noise-std', default=1., type=float, help="add noise with this std in training (default: %(default)s)")
+        parser.add_argument('--annealing-epochs', default=200, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
+        parser.add_argument('--min-annealing-factor', default=0.2, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
         return parser
 
 

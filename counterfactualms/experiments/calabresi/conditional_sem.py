@@ -4,6 +4,7 @@ from pyro.distributions import (
     Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
+from pyro import poutine
 import torch
 
 from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
@@ -104,7 +105,7 @@ class ConditionalVISEM(BaseVISEM):
 
     # no arguments because model is called with condition decorator
     @pyro_method
-    def model(self):
+    def model(self, annealing_factor:float=1.):
         obs = self.pgm_model()
 
         ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
@@ -116,7 +117,8 @@ class ConditionalVISEM(BaseVISEM):
             z_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
         else:
             z_dist = Normal(self.z_loc, self.z_scale).to_event(1)
-        z = pyro.sample('z', z_dist)
+        with poutine.scale(None, annealing_factor):
+            z = pyro.sample('z', z_dist)
         latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
         x_dist = self._get_transformed_x_dist(latent)  # run decoder
@@ -126,7 +128,7 @@ class ConditionalVISEM(BaseVISEM):
         return obs
 
     @pyro_method
-    def guide(self, obs):
+    def guide(self, obs, annealing_factor:float=1.):
         batch_size = obs['x'].shape[0]
         with pyro.plate('observations', batch_size):
             hidden = self.encoder(obs['x'])
@@ -137,7 +139,8 @@ class ConditionalVISEM(BaseVISEM):
 
             hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
             latent_dist = self.latent_encoder.predict(hidden)
-            z = pyro.sample('z', latent_dist)
+            with poutine.scale(None, annealing_factor):
+                z = pyro.sample('z', latent_dist)
 
         return z
 
