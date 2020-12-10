@@ -274,16 +274,16 @@ class BaseVISEM(BaseSEM):
         raise NotImplementedError()
 
     @pyro_method
-    def svi_guide(self, obs):
+    def svi_guide(self, obs, **kwargs):
         self._check_observation(obs)
-        self.guide(obs)
+        self.guide(obs, **kwargs)
 
     @pyro_method
-    def svi_model(self, obs):
+    def svi_model(self, obs, **kwargs):
         self._check_observation(obs)
         batch_size = obs['x'].shape[0]
         with pyro.plate('observations', batch_size):
-            pyro.condition(self.model, data=obs)()
+            pyro.condition(self.model, data=obs)(**kwargs)
 
     @pyro_method
     def infer_z(self, *args, **kwargs):
