@@ -465,9 +465,8 @@ class SVIExperiment(BaseCovariateExperiment):
         guide = self.svi.loss_class.trace_storage['guide']
         for k in self.required_data:
             metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
-        af = self.pyro_model.annealing_factor
-        metrics['log p(z)'] = af * model.nodes['z']['log_prob'].mean()
-        metrics['log q(z)'] = af * guide.nodes['z']['log_prob'].mean()
+        metrics['log p(z)'] = model.nodes['z']['log_prob'].mean()
+        metrics['log q(z)'] = guide.nodes['z']['log_prob'].mean()
         metrics['log p(z) - log q(z)'] = metrics['log p(z)'] - metrics['log q(z)']
         return metrics
 
