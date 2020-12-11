@@ -513,15 +513,19 @@ class BaseCovariateExperiment(pl.LightningModule):
         parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--crop-size', default=(224,224), type=int, nargs=2, help="size of patch to take from image (default: %(default)s)")
+        parser.add_argument('--train-crop-type', default='random', choices=['random', 'center'], help="how to crop training images (default: %(default)s)")
         parser.add_argument('--sample-img-interval', default=5, type=int, help="interval in which to sample and log images (default: %(default)s)")
         parser.add_argument('--train-batch-size', default=128, type=int, help="train batch size (default: %(default)s)")
         parser.add_argument('--test-batch-size', default=64, type=int, help="test batch size (default: %(default)s)")
         parser.add_argument('--validate', default=False, action='store_true', help="whether to validate (default: %(default)s)")
         parser.add_argument('--lr', default=1e-4, type=float, help="lr of deep part (default: %(default)s)")
         parser.add_argument('--pgm-lr', default=5e-3, type=float, help="lr of pgm (default: %(default)s)")
-        parser.add_argument('--weight-decay', default=0., type=float, help="weight decay (default: %(default)s)")
+        parser.add_argument('--weight-decay', default=0., type=float, help="weight decay for adam (default: %(default)s)")
         parser.add_argument('--betas', default=(0.9,0.999), type=float, nargs=2, help="betas for adam (default: %(default)s)")
-        parser.add_argument('--clip-norm', default=100., type=float, help="clip norm for grad (default: %(default)s)")
-        parser.add_argument('--lrd', default=0.999, type=float, help="learning rate decay (default: %(default)s)")
-        parser.add_argument('--train-crop-type', default='random', choices=['random', 'center'], help="how to crop training images (default: %(default)s)")
+        parser.add_argument('--clip-norm', default=100., type=float, help="clip norm for grad for adam (default: %(default)s)")
+        parser.add_argument('--lrd', default=0.999, type=float, help="learning rate decay for adam (default: %(default)s)")
+        parser.add_argument('--use-adagrad-rmsprop', default=False, action='store_true', help="use adagrad-rmsprop mashup (default: %(default)s)")
+        parser.add_argument('--eta', default=1.0, type=float, help="eta in adagrad-rmsprop mashup (default: %(default)s)")
+        parser.add_argument('--delta', default=1e-16, type=float, help="delta in adagrad-rmsprop mashup (default: %(default)s)")
+        parser.add_argument('--t', default=0.1, type=float, help="t in adagrad-rmsprop mashup (default: %(default)s)")
         return parser

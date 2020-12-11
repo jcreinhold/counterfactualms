@@ -5,7 +5,7 @@ import numpy as np
 import pyro
 from pyro.infer import SVI, TraceGraph_ELBO
 from pyro.nn import pyro_method
-from pyro.optim import ClippedAdam
+from pyro.optim import ClippedAdam, AdagradRMSProp
 from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, SigmoidTransform, Spline
@@ -383,9 +383,12 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def _build_svi(self, loss=None):
         def per_param_callable(module_name, param_name):
-            params = {'weight_decay': self.hparams.weight_decay,
-                      'betas': self.hparams.betas, 'eps': 1e-5,
-                      'clip_norm': self.hparams.clip_norm, 'lrd': self.hparams.lrd}
+            if self.hparams.use_adagrad_rmsprop:
+                params = {'eta': self.hparams.eta, 'delta': self.hparams.delta, 't': self.hparams.t}
+            else:
+                params = {'weight_decay': self.hparams.weight_decay,
+                          'betas': self.hparams.betas, 'eps': 1e-5,
+                          'clip_norm': self.hparams.clip_norm, 'lrd': self.hparams.lrd}
             if 'flow_components' in module_name or 'sex_logits' in param_name:
                 params['lr'] = self.hparams.pgm_lr
             else:
@@ -396,12 +399,13 @@ class SVIExperiment(BaseCovariateExperiment):
         if loss is None:
             loss = self.svi_loss
 
+        optimizer = AdagradRMSProp if self.hparams.use_adagrad_rmsprop else ClippedAdam
         if self.hparams.use_cf_guide:
             def guide(*args, **kwargs):
                 return self.pyro_model.counterfactual_guide(*args, **kwargs, counterfactual_type=self.hparams.cf_elbo_type)
-            self.svi = SVI(self.pyro_model.svi_model, guide, ClippedAdam(per_param_callable), loss)
+            self.svi = SVI(self.pyro_model.svi_model, guide, optimizer(per_param_callable), loss)
         else:
-            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, ClippedAdam(per_param_callable), loss)
+            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, optimizer(per_param_callable), loss)
         self.svi.loss_class = loss
 
     def backward(self, *args, **kwargs):
