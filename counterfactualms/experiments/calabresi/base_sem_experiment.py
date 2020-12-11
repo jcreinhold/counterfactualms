@@ -3,7 +3,7 @@ from typing import Mapping, Tuple
 
 import numpy as np
 import pyro
-from pyro.infer import SVI, TraceGraph_ELBO
+from pyro.infer import SVI, TraceGraph_ELBO, Trace_ELBO
 from pyro.nn import pyro_method
 from pyro.optim import ClippedAdam, AdagradRMSProp
 from pyro.distributions.torch_transform import ComposeTransformModule
@@ -32,7 +32,19 @@ from counterfactualms.experiments.calabresi.base_experiment import (
 logger = logging.getLogger(__name__)
 
 
-class CustomELBO(TraceGraph_ELBO):
+class StorageTraceGraph_ELBO(TraceGraph_ELBO):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.trace_storage = {'model': None, 'guide': None}
+
+    def _get_trace(self, model, guide, args, kwargs):
+        model_trace, guide_trace = super()._get_trace(model, guide, args, kwargs)
+        self.trace_storage['model'] = model_trace
+        self.trace_storage['guide'] = guide_trace
+        return model_trace, guide_trace
+
+
+class StorageTrace_ELBO(Trace_ELBO):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.trace_storage = {'model': None, 'guide': None}
@@ -379,7 +391,10 @@ class BaseVISEM(BaseSEM):
 class SVIExperiment(BaseCovariateExperiment):
     def __init__(self, hparams, pyro_model: BaseSEM):
         super().__init__(hparams, pyro_model)
-        self.svi_loss = CustomELBO(num_particles=hparams.num_svi_particles)
+        if hparams.tracegraph_elbo:
+            self.svi_loss = StorageTraceGraph_ELBO(num_particles=hparams.num_svi_particles)
+        else:
+            self.svi_loss = StorageTrace_ELBO(num_particles=hparams.num_svi_particles)
         self._build_svi()
 
     def _build_svi(self, loss=None):
@@ -545,6 +560,7 @@ class SVIExperiment(BaseCovariateExperiment):
         parser.add_argument('--noise-std', default=1., type=float, help="add noise with this std in training (default: %(default)s)")
         parser.add_argument('--annealing-epochs', default=50, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
         parser.add_argument('--min-annealing-factor', default=0.2, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
+        parser.add_argument('--tracegraph-elbo', default=False, action='store_true', help="use tracegraph elbo (much more computationally expensive) (default: %(default)s)")
         return parser
 
 

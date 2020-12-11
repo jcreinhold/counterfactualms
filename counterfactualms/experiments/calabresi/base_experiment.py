@@ -157,12 +157,6 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         self.torch_device = self.trainer.root_gpu if self.trainer.on_gpu else self.trainer.root_device
 
-        brain_volumes = torch.linspace(8000., 16000., 3, dtype=torch.float, device=self.torch_device)
-        self.brain_volume_range = brain_volumes.repeat(3).unsqueeze(1)
-        ventricle_volumes = torch.linspace(10., 2500., 3, dtype=torch.float, device=self.torch_device)
-        self.ventricle_volume_range = ventricle_volumes.repeat_interleave(3).unsqueeze(1)
-        self.z_range = torch.randn([1, self.hparams.latent_dim], dtype=torch.float, device=self.torch_device).repeat((9, 1))
-
         age = torch.from_numpy(self.calabresi_train.csv['age'].to_numpy())
         self.pyro_model.age_flow_lognorm_loc = age.log().mean().to(self.torch_device).float()
         self.pyro_model.age_flow_lognorm_scale = age.log().std().to(self.torch_device).float()
@@ -204,7 +198,7 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def train_dataloader(self):
         return DataLoader(self.calabresi_train, batch_size=self.train_batch_size,
-                          shuffle=True, **self._dataloader_params())
+                          shuffle=True, drop_last=True, **self._dataloader_params())
 
     def val_dataloader(self):
         return DataLoader(self.calabresi_val, batch_size=self.test_batch_size,
@@ -238,15 +232,6 @@ class BaseCovariateExperiment(pl.LightningModule):
         samples = outputs['samples']
         sample_trace = pyro.poutine.trace(self.pyro_model.sample).get_trace(self.hparams.test_batch_size)
         samples['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
-
-        cond_data = {
-            'brain_volume': self.brain_volume_range.repeat(self.hparams.test_batch_size, 1),
-            'ventricle_volume': self.ventricle_volume_range.repeat(self.hparams.test_batch_size, 1),
-            'lesion_volume': self.lesion_volume_range.repeat(self.hparams.test_batch_size, 1),
-            'z': torch.randn([self.hparams.test_batch_size, self.hparams.latent_dim], device=self.torch_device, dtype=torch.float).repeat_interleave(9, 0)
-        }
-        sample_trace = pyro.poutine.trace(pyro.condition(self.pyro_model.sample, data=cond_data)).get_trace(9 * self.hparams.test_batch_size)
-        samples['conditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
 
         logger.info(f'Got samples: {tuple(samples.keys())}')
         for k, v in samples.items():
@@ -432,12 +417,6 @@ class BaseCovariateExperiment(pl.LightningModule):
             s = samples.shape[0] // 8
             m = 8 * s
             self.log_img_grid('samples', samples.data[:m:s])
-
-            cond_data = {'brain_volume': self.brain_volume_range,
-                         'ventricle_volume': self.ventricle_volume_range,
-                         'z': self.z_range}
-            samples = pyro.condition(self.pyro_model.sample, data=cond_data)(9)['x']
-            self.log_img_grid('cond_samples', samples.data, nrow=3)
 
             obs_batch = self.prep_batch(self.get_batch(self.val_dataloader()))
 
