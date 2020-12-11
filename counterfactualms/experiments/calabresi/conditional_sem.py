@@ -105,19 +105,19 @@ class ConditionalVISEM(BaseVISEM):
 
     # no arguments because model is called with condition decorator
     @pyro_method
-    def model(self, annealing_factor:float=1.):
+    def model(self):
         obs = self.pgm_model()
 
         ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
         lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
-        if self.prior_components > 1:
-            z_scale = (0.5 * self.z_scale).exp() + 1e-5  # z_scale parameter is logvar
-            z_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
-        else:
-            z_dist = Normal(self.z_loc, self.z_scale).to_event(1)
-        with poutine.scale(scale=annealing_factor):
+        with poutine.scale(scale=self.annealing_factor):
+            if self.prior_components > 1:
+                z_scale = (0.5 * self.z_scale).exp() + 1e-5  # z_scale parameter is logvar
+                z_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
+            else:
+                z_dist = Normal(self.z_loc, self.z_scale).to_event(1)
             z = pyro.sample('z', z_dist)
         latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
@@ -128,7 +128,7 @@ class ConditionalVISEM(BaseVISEM):
         return obs
 
     @pyro_method
-    def guide(self, obs, annealing_factor:float=1.):
+    def guide(self, obs):
         batch_size = obs['x'].shape[0]
         with pyro.plate('observations', batch_size):
             hidden = self.encoder(obs['x'])
@@ -138,8 +138,8 @@ class ConditionalVISEM(BaseVISEM):
             lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
             hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
-            latent_dist = self.latent_encoder.predict(hidden)
-            with poutine.scale(scale=annealing_factor):
+            with poutine.scale(scale=self.annealing_factor):
+                latent_dist = self.latent_encoder.predict(hidden)
                 z = pyro.sample('z', latent_dist)
 
         return z

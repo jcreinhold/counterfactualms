@@ -274,16 +274,16 @@ class BaseVISEM(BaseSEM):
         raise NotImplementedError()
 
     @pyro_method
-    def svi_guide(self, obs, **kwargs):
+    def svi_guide(self, obs):
         self._check_observation(obs)
-        self.guide(obs, **kwargs)
+        self.guide(obs)
 
     @pyro_method
-    def svi_model(self, obs, **kwargs):
+    def svi_model(self, obs):
         self._check_observation(obs)
         batch_size = obs['x'].shape[0]
         with pyro.plate('observations', batch_size):
-            pyro.condition(self.model, data=obs)(**kwargs)
+            pyro.condition(self.model, data=obs)()
 
     @pyro_method
     def infer_z(self, *args, **kwargs):
@@ -464,9 +464,9 @@ class SVIExperiment(BaseCovariateExperiment):
         guide = self.svi.loss_class.trace_storage['guide']
         for k in self.required_data:
             metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
-        scale = model.nodes['z']['scale']  # presumably the annealing factor
-        metrics['log p(z)'] = scale * model.nodes['z']['log_prob'].mean()
-        metrics['log q(z)'] = scale * guide.nodes['z']['log_prob'].mean()
+        af = self.pyro_model.annealing_factor
+        metrics['log p(z)'] = af * model.nodes['z']['log_prob'].mean()
+        metrics['log q(z)'] = af * guide.nodes['z']['log_prob'].mean()
         metrics['log p(z) - log q(z)'] = metrics['log p(z)'] - metrics['log q(z)']
         return metrics
 
@@ -481,26 +481,28 @@ class SVIExperiment(BaseCovariateExperiment):
                 out[k] = batch[k].unsqueeze(1).float()
         return out
 
-    def _annealing_factor(self):
-        if self.hparams.annealing_epochs > 0 and self.current_epoch < self.hparams.annealing_epochs:
+    def _set_annealing_factor(self):
+        not_in_sanity_check = self.hparams.annealing_epochs > 0
+        in_annealing_epochs = self.current_epoch < self.hparams.annealing_epochs
+        if not_in_sanity_check and in_annealing_epochs and self.training:
             min_af = self.hparams.min_annealing_factor
-            annealing_factor = min_af + (1.0 - min_af) * \
+            self.pyro_model.annealing_factor = min_af + (1.0 - min_af) * \
                                (float(self.current_epoch + 1) /
                                 float(self.hparams.annealing_epochs))
         else:
-            annealing_factor = 1.0
-        return annealing_factor
+            self.pyro_model.annealing_factor = 1.0
 
     def training_step(self, batch, batch_idx):
-        annealing_factor = self._annealing_factor()
+        self._set_annealing_factor()
         batch = self.prep_batch(batch)
         if self.hparams.validate:
             logging.info('Validation:')
             self.print_trace_updates(batch)
-        loss = self.svi.step(batch, annealing_factor=annealing_factor)
+        loss = self.svi.step(batch)
         loss = torch.as_tensor(loss)
         self.log('train_loss', loss, on_step=False, on_epoch=True)
-        self.log('annealing_factor', annealing_factor, on_step=False, on_epoch=True)
+        af = self.pyro_model.annealing_factor
+        self.log('annealing_factor', af, on_step=False, on_epoch=True)
         metrics = self.get_trace_metrics(batch)
         if np.isnan(loss):
             self.logger.experiment.add_text('nan', f'nand at {self.current_epoch}:\n{metrics}')
@@ -511,6 +513,7 @@ class SVIExperiment(BaseCovariateExperiment):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        self._set_annealing_factor()
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
@@ -520,6 +523,7 @@ class SVIExperiment(BaseCovariateExperiment):
         return metrics
 
     def test_step(self, batch, batch_idx):
+        self._set_annealing_factor()
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
