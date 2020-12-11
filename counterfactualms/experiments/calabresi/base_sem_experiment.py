@@ -488,7 +488,7 @@ class SVIExperiment(BaseCovariateExperiment):
     def prep_batch(self, batch):
         x = batch['image'] * 255.
         x = x.float()
-        if self.training:
+        if self.training and self.hparams.noise_std > 0.:
             x += self.hparams.noise_std * torch.rand_like(x)
         out = dict(x=x)
         for k in self.required_data:
