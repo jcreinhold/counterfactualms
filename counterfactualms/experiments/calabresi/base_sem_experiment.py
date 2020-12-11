@@ -79,6 +79,7 @@ class BaseVISEM(BaseSEM):
         self.use_spectral_norm = use_spectral_norm
         self.laplace_likelihood = laplace_likelihood
         self.eps = eps
+        self.annealing_factor = 1.  # initialize here; will be changed during training
 
         # decoder parts
         if use_nvae:
