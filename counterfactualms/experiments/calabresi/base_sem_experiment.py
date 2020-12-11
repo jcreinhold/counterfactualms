@@ -480,7 +480,7 @@ class SVIExperiment(BaseCovariateExperiment):
                 out[k] = batch[k].unsqueeze(1).float()
         return out
 
-    def training_step(self, batch, batch_idx):
+    def _annealing_factor(self):
         if self.hparams.annealing_epochs > 0 and self.current_epoch < self.hparams.annealing_epochs:
             min_af = self.hparams.min_annealing_factor
             annealing_factor = min_af + (1.0 - min_af) * \
@@ -488,6 +488,10 @@ class SVIExperiment(BaseCovariateExperiment):
                                 float(self.hparams.annealing_epochs))
         else:
             annealing_factor = 1.0
+        return annealing_factor
+
+    def training_step(self, batch, batch_idx):
+        annealing_factor = self._annealing_factor()
         batch = self.prep_batch(batch)
         if self.hparams.validate:
             logging.info('Validation:')
@@ -534,7 +538,7 @@ class SVIExperiment(BaseCovariateExperiment):
             '--cf-elbo-type', default=-1, choices=[-1, 0, 1, 2],
             help="-1: randomly select per batch, 0: shuffle thickness, 1: shuffle intensity, 2: shuffle both (default: %(default)s)")
         parser.add_argument('--noise-std', default=1., type=float, help="add noise with this std in training (default: %(default)s)")
-        parser.add_argument('--annealing-epochs', default=200, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
+        parser.add_argument('--annealing-epochs', default=50, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
         parser.add_argument('--min-annealing-factor', default=0.2, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
         return parser
 
