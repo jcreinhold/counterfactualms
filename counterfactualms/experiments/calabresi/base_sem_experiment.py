@@ -559,7 +559,7 @@ class SVIExperiment(BaseCovariateExperiment):
             help="-1: randomly select per batch, 0: shuffle thickness, 1: shuffle intensity, 2: shuffle both (default: %(default)s)")
         parser.add_argument('--noise-std', default=1., type=float, help="add noise with this std in training (default: %(default)s)")
         parser.add_argument('--annealing-epochs', default=50, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
-        parser.add_argument('--min-annealing-factor', default=0.2, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
+        parser.add_argument('--min-annealing-factor', default=0.2, type=float, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
         parser.add_argument('--tracegraph-elbo', default=False, action='store_true', help="use tracegraph elbo (much more computationally expensive) (default: %(default)s)")
         return parser
 
