@@ -5,11 +5,8 @@ from pyro.distributions import (
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro.distributions.transforms import conditional_spline
-from pyro.distributions.transforms import ConditionalSplineAutoregressive
-from pyro.nn import ConditionalAutoRegressiveNN
 from pyro import poutine
 import torch
-from torch import nn
 
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
@@ -46,12 +43,12 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        self.prior_flow_components = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128])
+        self.prior_flow_components = conditional_spline(self.latent_dim, 3, [128, 128])
         self.prior_flow_transforms = [
             self.prior_flow_components
         ]
 
-        self.posterior_flow_components = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128])
+        self.posterior_flow_components = conditional_spline(self.latent_dim, 3, [128, 128])
         self.posterior_flow_transforms = [
             self.posterior_flow_components
         ]
@@ -147,23 +144,6 @@ class ConditionalFlowVISEM(BaseVISEM):
                 z = pyro.sample('z', latent_dist)
 
         return z
-
-
-# temporary condition spline autoregressive flow until fixed in pyro
-def conditional_spline_autoregressive(input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0,
-                                      order='linear'):
-    if hidden_dims is None:
-        hidden_dims = [input_dim * 10, input_dim * 10]
-
-    if order == 'linear':
-        param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
-    elif order == 'quadratic':
-        param_dims = [count_bins, count_bins, count_bins - 1]
-    else:
-        raise ValueError("Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
-            order))
-    arn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims, param_dims=param_dims)
-    return ConditionalSplineAutoregressive(input_dim, arn, count_bins=count_bins, bound=bound, order=order)
 
 
 MODEL_REGISTRY[ConditionalFlowVISEM.__name__] = ConditionalFlowVISEM
