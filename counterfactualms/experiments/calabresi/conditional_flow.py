@@ -121,9 +121,8 @@ class ConditionalFlowVISEM(BaseVISEM):
         _ = self.prior_flow_components
         with poutine.scale(scale=self.annealing_factor):
             z = pyro.sample('z', z_dist)
-        latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
-        x_dist = self._get_transformed_x_dist(latent)  # run decoder
+        x_dist = self._get_transformed_x_dist(z)  # run decoder
         x = pyro.sample('x', x_dist)
 
         obs.update(dict(x=x, z=z))
