@@ -73,7 +73,7 @@ class BaseVISEM(BaseSEM):
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, use_weight_norm=False, use_spectral_norm=False, laplace_likelihood=False,
-                 eps=0.1, **kwargs):
+                 eps=0.1, noise_std=0., **kwargs):
         super().__init__(**kwargs)
         self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
@@ -90,6 +90,7 @@ class BaseVISEM(BaseSEM):
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
         self.laplace_likelihood = laplace_likelihood
+        self.noise_std = noise_std
         self.eps = eps
         self.annealing_factor = 1.  # initialize here; will be changed during training
 
@@ -364,6 +365,13 @@ class BaseVISEM(BaseSEM):
         out = {k: torch.stack(v).mean(0) for k, v in out.items()}
         return out
 
+    def _add_noise(self, x):
+        if self.training and self.noise_std > 0.:
+            x = x.clone()
+            with torch.no_grad():
+                x += self.noise_std * torch.rand_like(x)
+        return x
+
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
@@ -384,7 +392,7 @@ class BaseVISEM(BaseSEM):
             choices=['fixed_var', 'learned_var', 'independent_gaussian', 'sharedvar_multivariate_gaussian',
                      'multivariate_gaussian', 'sharedvar_lowrank_multivariate_gaussian', 'lowrank_multivariate_gaussian'])
         parser.add_argument('--decoder-cov-rank', default=10, type=int, help="rank for lowrank cov approximation (requires lowrank decoder) (default: %(default)s)")  # noqa: E501
-
+        parser.add_argument('--noise-std', default=0., type=float, help="add noise with this std in training to img in guide (default: %(default)s)")
         return parser
 
 
@@ -486,10 +494,7 @@ class SVIExperiment(BaseCovariateExperiment):
         return metrics
 
     def prep_batch(self, batch):
-        x = batch['image'] * 255.
-        x = x.float()
-        if self.training and self.hparams.noise_std > 0.:
-            x += self.hparams.noise_std * torch.rand_like(x)
+        x = (2. * batch['image'].float()) - 1.
         out = dict(x=x)
         for k in self.required_data:
             if k in batch:
@@ -557,7 +562,6 @@ class SVIExperiment(BaseCovariateExperiment):
         parser.add_argument(
             '--cf-elbo-type', default=-1, choices=[-1, 0, 1, 2],
             help="-1: randomly select per batch, 0: shuffle thickness, 1: shuffle intensity, 2: shuffle both (default: %(default)s)")
-        parser.add_argument('--noise-std', default=1., type=float, help="add noise with this std in training (default: %(default)s)")
         parser.add_argument('--annealing-epochs', default=50, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
         parser.add_argument('--min-annealing-factor', default=0.2, type=float, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
         parser.add_argument('--tracegraph-elbo', default=False, action='store_true', help="use tracegraph elbo (much more computationally expensive) (default: %(default)s)")

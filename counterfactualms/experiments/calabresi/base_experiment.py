@@ -1,3 +1,4 @@
+from typing import Tuple
 from functools import partial
 import logging
 import os
@@ -26,7 +27,7 @@ MODEL_REGISTRY = {}
 
 
 class BaseSEM(PyroModule):
-    def __init__(self, preprocessing:str='realnvp', resize:int=-1):
+    def __init__(self, preprocessing:str='realnvp', resize:Tuple[int,int]=(0,0)):
         super().__init__()
         self.resize = resize
         self.preprocessing = preprocessing
@@ -86,10 +87,6 @@ class BaseSEM(PyroModule):
         with pyro.plate('observations', n_samples):
             samples = self.scm()
         return samples
-
-    @pyro_method
-    def infer_e_x(self, *args, **kwargs):
-        raise NotImplementedError()
 
     @pyro_method
     def infer_exogenous(self, obs):
