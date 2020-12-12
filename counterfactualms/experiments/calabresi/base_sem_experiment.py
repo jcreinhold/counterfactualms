@@ -494,7 +494,7 @@ class SVIExperiment(BaseCovariateExperiment):
         return metrics
 
     def prep_batch(self, batch):
-        x = (2. * batch['image'].float()) - 1.
+        x = 255. * batch['image'].float()  # multiply by 255 b/c preprocess tfms
         out = dict(x=x)
         for k in self.required_data:
             if k in batch:

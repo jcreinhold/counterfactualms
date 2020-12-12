@@ -75,7 +75,7 @@ save_fmt = {
     'type': lambda s: '{}'.format(['HC', 'MS'][int(s)]),
 }
 
-imshow_kwargs = dict(vmin=-1., vmax=1.)
+imshow_kwargs = dict(vmin=0., vmax=255.)
 
 def get_best_model(model_paths):
     min_score = np.inf
@@ -164,7 +164,7 @@ def fmt_save(intervention):
 
 
 def prep_data(batch):
-    x = (2 * batch['image'].unsqueeze(0)) - 1
+    x = 255. * batch['image'].unsqueeze(0)
     age = batch['age'].unsqueeze(0).unsqueeze(0).float()
     sex = batch['sex'].unsqueeze(0).unsqueeze(0).float()
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
@@ -228,7 +228,6 @@ def interactive_plot(model_name):
     def _to_png(x):
         if hasattr(x, 'numpy'):
             x = x.numpy()
-        x = 255. * ((x + 1) / 2)
         x = np.rot90(x.squeeze(), n_rot90)
         x = np.clip(x, 0., 255.)
         x = x.astype(np.uint8)
