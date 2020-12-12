@@ -46,12 +46,12 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        self.prior_flow_components = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128], order='quadratic')
+        self.prior_flow_components = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128])
         self.prior_flow_transforms = [
             self.prior_flow_components
         ]
 
-        self.posterior_flow_components = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128], order='quadratic')
+        self.posterior_flow_components = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128])
         self.posterior_flow_transforms = [
             self.posterior_flow_components
         ]
