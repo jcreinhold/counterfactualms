@@ -26,7 +26,7 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
         ]
 
-        self.ventricle_volume_flow_components = conditional_spline(1, 2, [8, 16])
+        self.ventricle_volume_flow_components = conditional_spline(1, 3, [8, 16])
         self.ventricle_volume_flow_transforms = [
             self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
         ]
@@ -41,7 +41,7 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        self.score_flow_components = conditional_spline(1, 3, [10, 20])
+        self.score_flow_components = conditional_spline(1, 4, [16, 32])
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
         ]

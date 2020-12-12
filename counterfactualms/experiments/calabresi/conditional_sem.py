@@ -42,7 +42,7 @@ class ConditionalVISEM(BaseVISEM):
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        score_net = DenseNN(3, [10, 20], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        score_net = DenseNN(4, [10, 20], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
         self.score_flow_components = ConditionalAffineTransform(context_nn=score_net, event_dim=0)
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
