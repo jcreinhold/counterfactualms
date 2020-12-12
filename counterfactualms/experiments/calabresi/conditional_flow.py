@@ -1,12 +1,13 @@
 import pyro
-from pyro.nn import pyro_method
+from pyro.nn import pyro_method, DenseNN
 from pyro.distributions import (
     Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from pyro.distributions.transforms import conditional_spline
+from pyro.distributions.transforms import ConditionalSpline, conditional_householder
 from pyro import poutine
 import torch
+from torch import nn
 
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
@@ -48,7 +49,8 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.prior_flow_components
         ]
 
-        self.posterior_flow_components = conditional_spline(self.latent_dim, 3, [128, 128])
+        self.posterior_flow_components = conditional_householder(
+            self.latent_dim, 3, [128, 128], count_transforms=self.decoder_cov_rank)
         self.posterior_flow_transforms = [
             self.posterior_flow_components
         ]
@@ -144,6 +146,35 @@ class ConditionalFlowVISEM(BaseVISEM):
                 z = pyro.sample('z', latent_dist)
 
         return z
+
+
+def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0, order='linear'):
+
+    if hidden_dims is None:
+        hidden_dims = [input_dim * 10, input_dim * 10]
+
+    if order == 'linear':
+        net = DenseNN(context_dim,
+                     hidden_dims,
+                     param_dims=[input_dim * count_bins,
+                                 input_dim * count_bins,
+                                 input_dim * (count_bins - 1),
+                                 input_dim * count_bins],
+                     nonlinearity=nn.LeakyReLU(0.1))
+
+    elif order == 'quadratic':
+        net = DenseNN(context_dim,
+                     hidden_dims,
+                     param_dims=[input_dim * count_bins,
+                                 input_dim * count_bins,
+                                 input_dim * (count_bins - 1)],
+                     nonlinearity=nn.LeakyReLU(0.1))
+
+    else:
+        raise ValueError("Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
+            order))
+
+    return ConditionalSpline(net, input_dim, count_bins, bound=bound, order=order)
 
 
 MODEL_REGISTRY[ConditionalFlowVISEM.__name__] = ConditionalFlowVISEM
