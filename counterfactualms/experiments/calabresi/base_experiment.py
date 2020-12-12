@@ -313,6 +313,8 @@ class BaseCovariateExperiment(pl.LightningModule):
         return samples
 
     def log_img_grid(self, tag, imgs, normalize=True, save_img=False, **kwargs):
+        with torch.no_grad():
+            imgs = ((imgs + 1.) / 2.)
         if save_img:
             p = os.path.join(self.trainer.logger.experiment.log_dir, f'{tag}.png')
             torchvision.utils.save_image(imgs, p)
