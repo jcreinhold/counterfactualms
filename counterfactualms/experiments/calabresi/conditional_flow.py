@@ -7,8 +7,8 @@ from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro.distributions.transforms import conditional_spline, conditional_spline_autoregressive
 from pyro import poutine
 import torch
+from torch import nn
 
-from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
 
@@ -21,36 +21,40 @@ class ConditionalFlowVISEM(BaseVISEM):
 
         # brain_volume flow
         self.brain_volume_flow_components = conditional_spline(1, 2, [8, 16])
-        self.brain_volume_flow_transforms = [
+        self.brain_volume_flow_transforms = nn.ModuleList([
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
-        ]
+        ])
 
         # ventricle_volume flow
         self.ventricle_volume_flow_components = conditional_spline(1, 2, [8, 16])
-        self.ventricle_volume_flow_transforms = [
+        self.ventricle_volume_flow_transforms = nn.ModuleList([
             self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
-        ]
+        ])
 
         # lesion_volume flow
         self.lesion_volume_flow_components = conditional_spline(1, 4, [16, 32])
-        self.lesion_volume_flow_transforms = [
+        self.lesion_volume_flow_transforms = nn.ModuleList([
             self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
-        ]
+        ])
 
         # duration flow
         self.duration_flow_components = conditional_spline(1, 2, [8, 16])
-        self.duration_flow_transforms = [
+        self.duration_flow_transforms = nn.ModuleList([
             self.duration_flow_components, self.duration_flow_constraint_transforms
-        ]
+        ])
 
         # score flow
         self.score_flow_components = conditional_spline(1, 3, [10, 20])
-        self.score_flow_transforms = [
+        self.score_flow_transforms = nn.ModuleList([
             self.score_flow_components, self.score_flow_constraint_transforms
-        ]
+        ])
 
-        self.prior_flow = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128], order='quadratic')
-        self.posterior_flow = conditional_spline_autoregressive(self.latent_dim, 3, [128, 128], order='quadratic')
+        self.prior_flow = nn.ModuleList([
+            conditional_spline_autoregressive(self.latent_dim, 3, [128, 128], order='quadratic')
+        ])
+        self.posterior_flow = nn.ModuleList([
+            conditional_spline_autoregressive(self.latent_dim, 3, [128, 128], order='quadratic')
+        ])
 
     @pyro_method
     def pgm_model(self):

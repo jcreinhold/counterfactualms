@@ -124,7 +124,7 @@ class BaseVISEM(BaseSEM):
             torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
             self.decoder.logvar_head.bias.requires_grad = True
 
-        elif self.decoder_type == 'independent_gaussian':
+        elif self.decoder_type == 'independent_var':
             self.decoder = Conv2dIndepNormal(decoder, 1, 1)
             torch.nn.init.zeros_(self.decoder.logvar_head.weight)
             self.decoder.logvar_head.weight.requires_grad = True
@@ -389,7 +389,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--laplace-likelihood', default=False, action='store_true', help="use laplace likelihood for image (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
-            choices=['fixed_var', 'learned_var', 'independent_gaussian', 'sharedvar_multivariate_gaussian',
+            choices=['fixed_var', 'learned_var', 'independent_var', 'sharedvar_multivariate_gaussian',
                      'multivariate_gaussian', 'sharedvar_lowrank_multivariate_gaussian', 'lowrank_multivariate_gaussian'])
         parser.add_argument('--decoder-cov-rank', default=10, type=int, help="rank for lowrank cov approximation (requires lowrank decoder) (default: %(default)s)")  # noqa: E501
         parser.add_argument('--noise-std', default=0., type=float, help="add noise with this std in training to img in guide (default: %(default)s)")
