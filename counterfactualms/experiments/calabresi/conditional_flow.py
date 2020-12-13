@@ -15,8 +15,8 @@ from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM
 
 
 class ConditionalFlowVISEM(BaseVISEM):
-    # number of context dimensions for decoder (0 b/c using conditional flow)
-    context_dim = 0
+    # number of context dimensions for decoder (3 b/c brain vol, ventricle vol, lesion vol)
+    context_dim = 3
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -122,8 +122,9 @@ class ConditionalFlowVISEM(BaseVISEM):
         _ = self.prior_flow_components
         with poutine.scale(scale=self.annealing_factor):
             z = pyro.sample('z', z_dist)
+        latent = torch.cat([z, ctx], 1)
 
-        x_dist = self._get_transformed_x_dist(z)  # run decoder
+        x_dist = self._get_transformed_x_dist(latent)  # run decoder
         x = pyro.sample('x', x_dist)
 
         obs.update(dict(x=x, z=z))
@@ -140,6 +141,7 @@ class ConditionalFlowVISEM(BaseVISEM):
             brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
             lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
             ctx = torch.cat([ventricle_volume_, brain_volume_, lesion_volume_], 1)
+            hidden = torch.cat([hidden, ctx], 1)
 
             latent_base_dist = self.latent_encoder.predict(hidden)
             latent_dist = ConditionalTransformedDistribution(latent_base_dist, self.posterior_flow_transforms).condition(ctx)

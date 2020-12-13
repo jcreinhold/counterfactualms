@@ -70,7 +70,7 @@ class BaseSEM(PyroModule):
     @pyro_method
     def scm(self, *args, **kwargs):
         def config(msg):
-            if isinstance(msg['fn'], TransformedDistribution):
+            if isinstance(msg['fn'], TransformedDistribution) and msg['name'] != 'z':
                 return TransformReparam()
             else:
                 return None
