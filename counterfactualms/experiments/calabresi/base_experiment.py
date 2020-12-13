@@ -92,7 +92,8 @@ class BaseSEM(PyroModule):
     def infer_exogenous(self, obs):
         # assuming that we use transformed distributions for everything
         cond_sample = pyro.condition(self.sample, data=obs)
-        cond_trace = pyro.poutine.trace(cond_sample).get_trace(obs['x'].shape[0])
+        batch_size = obs['x'].shape[0]
+        cond_trace = pyro.poutine.trace(cond_sample).get_trace(batch_size)
 
         output = {}
         for name, node in cond_trace.nodes.items():

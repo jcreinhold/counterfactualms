@@ -337,6 +337,14 @@ class BaseVISEM(BaseSEM):
             recons += [recon['x']]
         return torch.stack(recons).mean(0)
 
+    def _cf_dict(self, counterfactuals):
+        out = {k: [] for k in self.required_data}
+        for cf in counterfactuals:
+            for k in self.required_data:
+                out[k].append(cf[k])
+        out = {k: torch.stack(v).mean(0) for k, v in out.items()}
+        return out
+
     @pyro_method
     def counterfactual(self, obs, condition:Mapping=None, num_particles:int=1):
         self._check_observation(obs)
@@ -358,12 +366,7 @@ class BaseVISEM(BaseSEM):
             cf = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogenous), data=condition)(n)
             counterfactuals += [cf]
 
-        out = {k: [] for k in self.required_data}
-        for cf in counterfactuals:
-            for k in self.required_data:
-                out[k].append(cf[k])
-        out = {k: torch.stack(v).mean(0) for k, v in out.items()}
-        return out
+        return self._cf_dict(counterfactuals)
 
     def _add_noise(self, x):
         if self.training and self.noise_std > 0.:

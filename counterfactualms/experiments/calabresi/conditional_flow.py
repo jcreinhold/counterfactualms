@@ -149,34 +149,6 @@ class ConditionalFlowVISEM(BaseVISEM):
 
         return z
 
-    @pyro_method
-    def counterfactual(self, obs, condition:Mapping=None, num_particles:int=1):
-        self._check_observation(obs)
-        obs_ = obs.copy()
-        n = obs_['x'].shape[0]
-
-        counterfactuals = []
-        for _ in range(num_particles):
-            z_dist = pyro.poutine.trace(self.guide).get_trace(obs_).nodes['z']['fn']  # variational posterior
-            z = pyro.sample('z', z_dist)
-            obs_.update(dict(z=z))
-            exogenous = self.infer_exogenous(obs_)
-            exogenous['z'] = z
-            # condition on these vars if they aren't included in 'do' as they are root nodes
-            # and we don't have the exogenous noise for them yet
-            if 'sex' not in condition.keys():
-                exogenous['sex'] = obs_['sex']
-
-            cf = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogenous), data=condition)(n)
-            counterfactuals += [cf]
-            del obs_['z']
-
-        out = {k: [] for k in self.required_data}
-        for cf in counterfactuals:
-            for k in self.required_data:
-                out[k].append(cf[k])
-        out = {k: torch.stack(v).mean(0) for k, v in out.items()}
-        return out
 
 def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0, order='linear'):
 
