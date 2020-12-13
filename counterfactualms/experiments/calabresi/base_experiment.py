@@ -97,7 +97,7 @@ class BaseSEM(PyroModule):
 
         output = {}
         for name, node in cond_trace.nodes.items():
-            if 'fn' not in node.keys():
+            if name == 'z' or 'fn' not in node.keys():
                 continue
 
             fn = node['fn']
