@@ -3,7 +3,6 @@ from functools import partial
 import inspect
 import os
 import re
-import traceback
 import warnings
 
 import matplotlib.pyplot as plt
@@ -31,7 +30,6 @@ n_rot90 = 0
 from counterfactualms.experiments import calabresi  # noqa: F401
 from counterfactualms.experiments.calabresi.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
 
-experiments = ['ConditionalVISEM']
 models = {}
 loaded_models = {}
 device = None
@@ -98,51 +96,43 @@ def get_best_model(model_paths):
     return model_paths[idx]
 
 
-def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True):
+def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True):
     """ run this first with paths to models corresponding to experiments """
-    if isinstance(model_paths, str):
-        model_paths = [model_paths]
-    if len(model_paths) != len(experiments):
-        raise ValueError('Provided paths do not match number of experiments')
-    for exp, path in zip(experiments, model_paths):
-        try:
-            ckpt = torch.load(path, map_location=torch.device('cpu'))
-            hparams = ckpt['hyper_parameters']
-            model_class = MODEL_REGISTRY[hparams['model']]
-            model_params = {
-                k: v for k, v in hparams.items() if (k in inspect.signature(model_class.__init__).parameters
-                                                     or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
-                                                     or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
-            }
-            model_params['img_shape'] = hparams['resize'] if 'resize' in hparams else exp_resize
-            new_state_dict = OrderedDict()
-            for key, value in ckpt['state_dict'].items():
-                new_key = key.replace('pyro_model.', '')
-                new_state_dict[new_key] = value
-            loaded_model = model_class(**model_params)
-            loaded_model.load_state_dict(new_state_dict)
-            for p in loaded_model._buffers.keys():
-                if 'norm' in p:
-                    setattr(loaded_model, p, getattr(loaded_model, p))
-            loaded_model.eval()
-            global device
-            device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
-            global loaded_models
-            loaded_models[exp] = loaded_model.to(device)
-            global crop_size
-            crop_size = exp_crop_size
-            global resize
-            resize = exp_resize
-            global calabresi_test
-            calabresi_test = CalabresiDataset(csv_path, crop_type='center', resize=resize, crop_size=crop_size)
-            def sample_pgm(num_samples, model):
-                with pyro.plate('observations', num_samples):
-                    return model.pgm_model()
-            global models
-            models[exp] = partial(sample_pgm, model=loaded_model)
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
+    ckpt = torch.load(model_path, map_location=torch.device('cpu'))
+    hparams = ckpt['hyper_parameters']
+    exp = hparams['model']
+    model_class = MODEL_REGISTRY[exp]
+    model_params = {
+        k: v for k, v in hparams.items() if (k in inspect.signature(model_class.__init__).parameters
+                                             or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
+                                             or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
+    }
+    model_params['img_shape'] = hparams['resize'] if 'resize' in hparams else exp_resize
+    new_state_dict = OrderedDict()
+    for key, value in ckpt['state_dict'].items():
+        new_key = key.replace('pyro_model.', '')
+        new_state_dict[new_key] = value
+    loaded_model = model_class(**model_params)
+    loaded_model.load_state_dict(new_state_dict)
+    for p in loaded_model._buffers.keys():
+        if 'norm' in p:
+            setattr(loaded_model, p, getattr(loaded_model, p))
+    loaded_model.eval()
+    global device
+    device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
+    global loaded_models
+    loaded_models[exp] = loaded_model.to(device)
+    global crop_size
+    crop_size = exp_crop_size
+    global resize
+    resize = exp_resize
+    global calabresi_test
+    calabresi_test = CalabresiDataset(csv_path, crop_type='center', resize=resize, crop_size=crop_size)
+    def sample_pgm(num_samples, model):
+        with pyro.plate('observations', num_samples):
+            return model.pgm_model()
+    global models
+    models[exp] = partial(sample_pgm, model=loaded_model)
 
 
 def fmt_intervention(intervention):
