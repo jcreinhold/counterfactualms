@@ -221,9 +221,9 @@ class BaseVISEM(BaseSEM):
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
         for i in range(self.n_prior_flows):
-            self.register_buffer(f'prior_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+            self.register_buffer(f'prior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
         for i in range(self.n_posterior_flows):
-            self.register_buffer(f'posterior_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+            self.register_buffer(f'posterior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
 
         # age flow
         self.age_flow_components = ComposeTransformModule([Spline(1)])
@@ -264,10 +264,10 @@ class BaseVISEM(BaseSEM):
         elif 'flow_norm_scale' in name:
             name_ = name.replace('flow_norm_scale', '')
             getattr(self, name_ + 'flow_norm').scale = value.item()
-        elif 'prior_permutation' in name:
+        elif 'prior_flow_permutation' in name:
             i = int(name[-1])
             self.prior_permutations[i] = value
-        elif 'posterior_permutation' in name:
+        elif 'posterior_flow_permutation' in name:
             i = int(name[-1])
             self.posterior_permutations[i] = value
 
