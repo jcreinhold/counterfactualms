@@ -74,6 +74,8 @@ save_fmt = {
 }
 
 imshow_kwargs = dict(vmin=0., vmax=255.)
+_buffers_to_load = ('norm', 'permutation', 'flow_affine', 'z_loc', 'z_scale')
+
 
 def get_best_model(model_paths):
     min_score = np.inf
@@ -117,7 +119,7 @@ def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), 
     global device
     device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
     for p in loaded_model._buffers.keys():
-        if 'norm' or 'permutation' in p:
+        if any([(p in b) for b in _buffers_to_load]):
             setattr(loaded_model, p, getattr(loaded_model, p).to(device))
     loaded_model.eval()
     global loaded_models

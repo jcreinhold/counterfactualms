@@ -6,8 +6,7 @@ from pyro.distributions import (
     Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from pyro.distributions.transforms import ConditionalSpline, Permute
-from pyro.distributions.transforms import spline, iterated
+from pyro.distributions.transforms import ConditionalSpline
 from pyro import poutine
 import torch
 from torch import nn
@@ -45,18 +44,6 @@ class ConditionalFlowVISEM(BaseVISEM):
         self.score_flow_components = conditional_spline(1, 4, [16, 32])
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
-        ]
-
-        self.prior_permutations = [Permute(torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)) for _ in range(self.n_prior_flows)]
-        self.prior_flow_components = iterated(self.n_prior_flows, spline, self.latent_dim)
-        self.prior_flow_transforms = [
-            x for c in zip(self.prior_permutations, self.prior_flow_components) for x in c
-        ]
-
-        self.posterior_permutations = [Permute(torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)) for _ in range(self.n_posterior_flows)]
-        self.posterior_flow_components = iterated(self.n_posterior_flows, spline, self.latent_dim)
-        self.posterior_flow_transforms = [
-            x for c in zip(self.posterior_permutations, self.posterior_flow_components) for x in c
         ]
 
     @pyro_method
@@ -120,7 +107,7 @@ class ConditionalFlowVISEM(BaseVISEM):
         ctx = torch.cat([ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
         z_base_dist = Normal(self.z_loc, self.z_scale).to_event(1)
-        z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms)
+        z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms) if self.use_prior_flow else z_base_dist
         _ = self.prior_flow_components
         with poutine.scale(scale=self.annealing_factor):
             z = pyro.sample('z', z_dist)
@@ -144,11 +131,11 @@ class ConditionalFlowVISEM(BaseVISEM):
             ctx = torch.cat([ventricle_volume_, brain_volume_, lesion_volume_], 1)
             hidden = torch.cat([hidden, ctx], 1)
 
-            latent_base_dist = self.latent_encoder.predict(hidden)
-            latent_dist = TransformedDistribution(latent_base_dist, self.posterior_flow_transforms)
+            z_base_dist = self.latent_encoder.predict(hidden)
+            z_dist = TransformedDistribution(z_base_dist, self.posterior_flow_transforms) if self.use_posterior_flow else z_base_dist
             _ = self.posterior_flow_components
             with poutine.scale(scale=self.annealing_factor):
-                z = pyro.sample('z', latent_dist)
+                z = pyro.sample('z', z_dist)
 
         return z
 

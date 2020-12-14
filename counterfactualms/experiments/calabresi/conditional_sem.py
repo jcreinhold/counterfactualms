@@ -50,18 +50,6 @@ class ConditionalVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        self.prior_permutations = [Permute(torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)) for _ in range(self.n_prior_flows)]
-        self.prior_flow_components = iterated(self.n_prior_flows, spline, self.latent_dim)
-        self.prior_flow_transforms = [
-            x for c in zip(self.prior_permutations, self.prior_flow_components) for x in c
-        ]
-
-        self.posterior_permutations = [Permute(torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)) for _ in range(self.n_posterior_flows)]
-        self.posterior_flow_components = iterated(self.n_posterior_flows, spline, self.latent_dim)
-        self.posterior_flow_transforms = [
-            x for c in zip(self.posterior_permutations, self.posterior_flow_components) for x in c
-        ]
-
     @pyro_method
     def pgm_model(self):
         sex_dist = Bernoulli(logits=self.sex_logits).to_event(1)
@@ -126,10 +114,7 @@ class ConditionalVISEM(BaseVISEM):
             z_base_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
         else:
             z_base_dist = Normal(self.z_loc, self.z_scale).to_event(1)
-        if self.n_prior_flows > 0:
-            z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms)
-        else:
-            z_dist = z_base_dist
+        z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms) if self.use_prior_flow else z_base_dist
         _ = self.prior_flow_components
         with poutine.scale(scale=self.annealing_factor):
             z = pyro.sample('z', z_dist)
@@ -153,10 +138,7 @@ class ConditionalVISEM(BaseVISEM):
 
             hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
             z_base_dist = self.latent_encoder.predict(hidden)
-            if self.n_posterior_flows > 0:
-                z_dist = TransformedDistribution(z_base_dist, self.posterior_flow_transforms)
-            else:
-                z_dist = z_base_dist
+            z_dist = TransformedDistribution(z_base_dist, self.posterior_flow_transforms) if self.use_posterior_flow else z_base_dist
             with poutine.scale(scale=self.annealing_factor):
                 z = pyro.sample('z', z_dist)
 

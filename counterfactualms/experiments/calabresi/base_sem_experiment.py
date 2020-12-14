@@ -8,8 +8,9 @@ from pyro.nn import pyro_method
 from pyro.optim import ClippedAdam, AdagradRMSProp
 from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
-    ComposeTransform, AffineTransform, ExpTransform, SigmoidTransform, Spline
+    ComposeTransform, AffineTransform, ExpTransform, Spline, Permute
 )
+from pyro.distributions.transforms import spline_coupling, iterated
 from pyro.distributions import (
     LowRankMultivariateNormal, MultivariateNormal, Normal, Laplace, TransformedDistribution  # noqa: F401
 )
@@ -21,7 +22,7 @@ from counterfactualms.arch.nvae import Decoder as NDecoder
 from counterfactualms.arch.nvae import Encoder as NEncoder
 from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
-from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
+from counterfactualms.distributions.transforms.affine import LearnedAffineTransform, LowerCholeskyAffine
 from counterfactualms.distributions.deep import (
     DeepMultivariateNormal, DeepIndepNormal, DeepIndepMixtureNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
 )
@@ -220,10 +221,15 @@ class BaseVISEM(BaseSEM):
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
+        perm = lambda: torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)
         for i in range(self.n_prior_flows):
-            self.register_buffer(f'prior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+            self.register_buffer(f'prior_flow_permutation_{i}', perm())
+            self.register_buffer(f'prior_flow_affine_loc_{i}', torch.zeros([1,]))
+            self.register_buffer(f'prior_flow_affine_scale_{i}', torch.ones([1,]))
         for i in range(self.n_posterior_flows):
-            self.register_buffer(f'posterior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+            self.register_buffer(f'posterior_flow_permutation_{i}', perm())
+            self.register_buffer(f'posterior_flow_affine_loc_{i}', torch.zeros([1,]))
+            self.register_buffer(f'posterior_flow_affine_scale_{i}', torch.ones([1,]))
 
         # age flow
         self.age_flow_components = ComposeTransformModule([Spline(1)])
@@ -250,6 +256,23 @@ class BaseVISEM(BaseSEM):
         self.score_flow_eps = AffineTransform(loc=-eps, scale=1.)
         self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform(), self.score_flow_eps])
 
+        coupling_kwargs = dict(hidden_dims=(self.latent_dim, self.latent_dim))
+        self.use_prior_flow = self.n_prior_flows > 0
+        self.prior_affine = [LearnedAffineTransform() for _ in range(self.n_prior_flows)]
+        self.prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
+        self.prior_flow_components = iterated(self.n_prior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_prior_flow else []
+        self.prior_flow_transforms = [
+            x for c in zip(self.prior_permutations, self.prior_affine, self.prior_flow_components) for x in c
+        ]
+
+        self.use_posterior_flow = self.n_posterior_flows > 0
+        self.posterior_affine = [LearnedAffineTransform() for _ in range(self.n_posterior_flows)]
+        self.posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
+        self.posterior_flow_components = iterated(self.n_posterior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_posterior_flow else []
+        self.posterior_flow_transforms = [
+            x for c in zip(self.posterior_permutations, self.posterior_affine, self.posterior_flow_components) for x in c
+        ]
+
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if 'flow_lognorm_loc' in name:
@@ -270,6 +293,18 @@ class BaseVISEM(BaseSEM):
         elif 'posterior_flow_permutation' in name:
             i = int(name[-1])
             self.posterior_permutations[i].permutation = value
+        elif 'prior_flow_affine_loc' in name:
+            i = int(name[-1])
+            self.prior_affine[i].loc = value
+        elif 'posterior_flow_affine_loc' in name:
+            i = int(name[-1])
+            self.posterior_affine[i].loc = value
+        elif 'prior_flow_affine_scale' in name:
+            i = int(name[-1])
+            self.prior_affine[i].scale = value
+        elif 'posterior_flow_affine_scale' in name:
+            i = int(name[-1])
+            self.posterior_affine[i].scale = value
 
     def _get_preprocess_transforms(self):
         return super()._get_preprocess_transforms().inv
