@@ -5,6 +5,8 @@ from pyro.distributions import (
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
+from pyro.distributions.transforms import Permute
+from pyro.distributions.transforms import spline, iterated
 import torch
 
 from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
@@ -46,6 +48,22 @@ class ConditionalVISEM(BaseVISEM):
         self.score_flow_components = ConditionalAffineTransform(context_nn=score_net, event_dim=0)
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
+        ]
+
+        for i in range(self.n_prior_flows):
+            self.register_buffer(f'prior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+        prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
+        self.prior_flow_components = iterated(self.n_prior_flows, spline, self.latent_dim)
+        self.prior_flow_transforms = [
+            x for c in zip(prior_permutations, self.prior_flow_components) for x in c
+        ]
+
+        for i in range(self.n_posterior_flows):
+            self.register_buffer(f'posterior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+        posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
+        self.posterior_flow_components = iterated(self.n_posterior_flows, spline, self.latent_dim)
+        self.posterior_flow_transforms = [
+            x for c in zip(posterior_permutations, self.posterior_flow_components) for x in c
         ]
 
     @pyro_method
@@ -109,9 +127,14 @@ class ConditionalVISEM(BaseVISEM):
 
         if self.prior_components > 1:
             z_scale = (0.5 * self.z_scale).exp() + 1e-5  # z_scale parameter is logvar
-            z_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
+            z_base_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
         else:
-            z_dist = Normal(self.z_loc, self.z_scale).to_event(1)
+            z_base_dist = Normal(self.z_loc, self.z_scale).to_event(1)
+        if self.n_prior_flows > 0:
+            z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms)
+        else:
+            z_dist = z_base_dist
+        _ = self.prior_flow_components
         with poutine.scale(scale=self.annealing_factor):
             z = pyro.sample('z', z_dist)
         latent = torch.cat([z, ventricle_volume_, brain_volume_, lesion_volume_], 1)
@@ -133,9 +156,13 @@ class ConditionalVISEM(BaseVISEM):
             lesion_volume_ = self.lesion_volume_flow_constraint_transforms.inv(obs['lesion_volume'])
 
             hidden = torch.cat([hidden, ventricle_volume_, brain_volume_, lesion_volume_], 1)
-            latent_dist = self.latent_encoder.predict(hidden)
+            z_base_dist = self.latent_encoder.predict(hidden)
+            if self.n_posterior_flows > 0:
+                z_dist = TransformedDistribution(z_base_dist, self.posterior_flow_transforms)
+            else:
+                z_dist = z_base_dist
             with poutine.scale(scale=self.annealing_factor):
-                z = pyro.sample('z', latent_dist)
+                z = pyro.sample('z', z_dist)
 
         return z
 
