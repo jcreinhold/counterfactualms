@@ -6,8 +6,8 @@ from pyro.distributions import (
     Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from pyro.distributions.transforms import ConditionalSpline
-from pyro.distributions.transforms import spline, permute, iterated
+from pyro.distributions.transforms import ConditionalSpline, Permute
+from pyro.distributions.transforms import spline, iterated
 from pyro import poutine
 import torch
 from torch import nn
@@ -47,13 +47,17 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        prior_permutations = [permute(self.latent_dim) for _ in range(self.n_prior_flows)]
+        for i in range(self.n_prior_flows):
+            self.register_buffer(f'prior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+        prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
         self.prior_flow_components = iterated(self.n_prior_flows, spline, self.latent_dim)
         self.prior_flow_transforms = [
             x for c in zip(prior_permutations, self.prior_flow_components) for x in c
         ]
 
-        posterior_permutations = [permute(self.latent_dim) for _ in range(self.n_posterior_flows)]
+        for i in range(self.n_posterior_flows):
+            self.register_buffer(f'posterior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
+        posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
         self.posterior_flow_components = iterated(self.n_posterior_flows, spline, self.latent_dim)
         self.posterior_flow_transforms = [
             x for c in zip(posterior_permutations, self.posterior_flow_components) for x in c
