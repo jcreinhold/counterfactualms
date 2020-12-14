@@ -182,12 +182,8 @@ class BaseCovariateExperiment(pl.LightningModule):
         perm = lambda: torch.randperm(self.pyro_model.latent_dim, dtype=torch.long, requires_grad=False).to(self.torch_device)
         for i in range(self.pyro_model.n_prior_flows):
             setattr(self.pyro_model, f'prior_flow_permutation_{i}', perm())
-            setattr(self.pyro_model, f'prior_flow_affine_loc_{i}', torch.zeros([1,]).to(self.torch_device))
-            setattr(self.pyro_model, f'prior_flow_affine_scale_{i}', torch.ones([1,]).to(self.torch_device))
         for i in range(self.pyro_model.n_posterior_flows):
             setattr(self.pyro_model, f'posterior_flow_permutation_{i}', perm())
-            setattr(self.pyro_model, f'posterior_flow_affine_loc_{i}', torch.zeros([1, ]).to(self.torch_device))
-            setattr(self.pyro_model, f'posterior_flow_affine_scale_{i}', torch.ones([1, ]).to(self.torch_device))
 
         if self.hparams.validate:
             logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')

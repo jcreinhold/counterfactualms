@@ -74,7 +74,7 @@ save_fmt = {
 }
 
 imshow_kwargs = dict(vmin=0., vmax=255.)
-_buffers_to_load = ('norm', 'permutation', 'flow_affine', 'z_loc', 'z_scale')
+_buffers_to_load = ('norm', 'permutation', 'z_loc', 'z_scale')
 
 
 def get_best_model(model_paths):

@@ -15,6 +15,7 @@ from pyro.distributions import (
     LowRankMultivariateNormal, MultivariateNormal, Normal, Laplace, TransformedDistribution  # noqa: F401
 )
 import torch
+from torch import nn
 from torch.distributions import Independent
 
 from counterfactualms.arch.medical import Decoder, Encoder
@@ -224,12 +225,8 @@ class BaseVISEM(BaseSEM):
         perm = lambda: torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)
         for i in range(self.n_prior_flows):
             self.register_buffer(f'prior_flow_permutation_{i}', perm())
-            self.register_buffer(f'prior_flow_affine_loc_{i}', torch.zeros([1,]))
-            self.register_buffer(f'prior_flow_affine_scale_{i}', torch.ones([1,]))
         for i in range(self.n_posterior_flows):
             self.register_buffer(f'posterior_flow_permutation_{i}', perm())
-            self.register_buffer(f'posterior_flow_affine_loc_{i}', torch.zeros([1,]))
-            self.register_buffer(f'posterior_flow_affine_scale_{i}', torch.ones([1,]))
 
         # age flow
         self.age_flow_components = ComposeTransformModule([Spline(1)])
@@ -258,7 +255,7 @@ class BaseVISEM(BaseSEM):
 
         coupling_kwargs = dict(hidden_dims=(self.latent_dim, self.latent_dim))
         self.use_prior_flow = self.n_prior_flows > 0
-        self.prior_affine = [LearnedAffineTransform() for _ in range(self.n_prior_flows)]
+        self.prior_affine = nn.ModuleList([LearnedAffineTransform() for _ in range(self.n_prior_flows)])
         self.prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
         self.prior_flow_components = iterated(self.n_prior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_prior_flow else []
         self.prior_flow_transforms = [
@@ -266,7 +263,7 @@ class BaseVISEM(BaseSEM):
         ]
 
         self.use_posterior_flow = self.n_posterior_flows > 0
-        self.posterior_affine = [LearnedAffineTransform() for _ in range(self.n_posterior_flows)]
+        self.posterior_affine = nn.ModuleList([LearnedAffineTransform() for _ in range(self.n_posterior_flows)])
         self.posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
         self.posterior_flow_components = iterated(self.n_posterior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_posterior_flow else []
         self.posterior_flow_transforms = [
@@ -293,18 +290,6 @@ class BaseVISEM(BaseSEM):
         elif 'posterior_flow_permutation' in name:
             i = int(name[-1])
             self.posterior_permutations[i].permutation = value
-        elif 'prior_flow_affine_loc' in name:
-            i = int(name[-1])
-            self.prior_affine[i].loc = value
-        elif 'posterior_flow_affine_loc' in name:
-            i = int(name[-1])
-            self.posterior_affine[i].loc = value
-        elif 'prior_flow_affine_scale' in name:
-            i = int(name[-1])
-            self.prior_affine[i].scale = value
-        elif 'posterior_flow_affine_scale' in name:
-            i = int(name[-1])
-            self.posterior_affine[i].scale = value
 
     def _get_preprocess_transforms(self):
         return super()._get_preprocess_transforms().inv
