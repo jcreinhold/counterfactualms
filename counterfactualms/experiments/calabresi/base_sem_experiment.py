@@ -73,7 +73,7 @@ class BaseVISEM(BaseSEM):
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, use_weight_norm=False, use_spectral_norm=False, laplace_likelihood=False,
-                 eps=0.1, noise_std=0., **kwargs):
+                 eps=0.1, n_prior_flows=3, n_posterior_flows=3, **kwargs):
         super().__init__(**kwargs)
         self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
@@ -90,8 +90,9 @@ class BaseVISEM(BaseSEM):
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
         self.laplace_likelihood = laplace_likelihood
-        self.noise_std = noise_std
         self.eps = eps
+        self.n_prior_flows = n_prior_flows
+        self.n_posterior_flows = n_posterior_flows
         self.annealing_factor = 1.  # initialize here; will be changed during training
 
         # decoder parts
@@ -368,13 +369,6 @@ class BaseVISEM(BaseSEM):
 
         return self._cf_dict(counterfactuals)
 
-    def _add_noise(self, x):
-        if self.training and self.noise_std > 0.:
-            x = x.clone()
-            with torch.no_grad():
-                x += self.noise_std * torch.rand_like(x)
-        return x
-
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
@@ -390,12 +384,13 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--use-weight-norm', default=False, action='store_true', help="use weight norm in conv layers (not w/ nvae) (default: %(default)s)")
         parser.add_argument('--use-spectral-norm', default=False, action='store_true', help="use spectral norm in conv layers (not w/ nvae) (default: %(default)s)")
         parser.add_argument('--laplace-likelihood', default=False, action='store_true', help="use laplace likelihood for image (default: %(default)s)")
+        parser.add_argument('--n-prior-flows', default=3, type=int, help="use this number of flows for prior in flow net (default: %(default)s)")
+        parser.add_argument('--n-posterior-flows', default=3, type=int, help="use this number of flows for posterior in flow net (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
             choices=['fixed_var', 'learned_var', 'independent_var', 'sharedvar_multivariate_gaussian',
                      'multivariate_gaussian', 'sharedvar_lowrank_multivariate_gaussian', 'lowrank_multivariate_gaussian'])
         parser.add_argument('--decoder-cov-rank', default=10, type=int, help="rank for lowrank cov approximation (requires lowrank decoder) (default: %(default)s)")  # noqa: E501
-        parser.add_argument('--noise-std', default=0., type=float, help="add noise with this std in training to img in guide (default: %(default)s)")
         return parser
 
 
@@ -498,6 +493,7 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def prep_batch(self, batch):
         x = 255. * batch['image'].float()  # multiply by 255 b/c preprocess tfms
+        x += (torch.rand_like(x) - 0.5) # add noise per Theis 2016
         out = dict(x=x)
         for k in self.required_data:
             if k in batch:
@@ -509,11 +505,12 @@ class SVIExperiment(BaseCovariateExperiment):
         in_annealing_epochs = self.current_epoch < self.hparams.annealing_epochs
         if not_in_sanity_check and in_annealing_epochs and self.training:
             min_af = self.hparams.min_annealing_factor
-            self.pyro_model.annealing_factor = min_af + (1.0 - min_af) * \
+            max_af = self.hparams.max_annealing_factor
+            self.pyro_model.annealing_factor = min_af + (max_af - min_af) * \
                                (float(self.current_epoch + 1) /
                                 float(self.hparams.annealing_epochs))
         else:
-            self.pyro_model.annealing_factor = 1.0
+            self.pyro_model.annealing_factor = self.hparams.max_annealing_factor
 
     def training_step(self, batch, batch_idx):
         self._set_annealing_factor()
@@ -565,8 +562,9 @@ class SVIExperiment(BaseCovariateExperiment):
         parser.add_argument(
             '--cf-elbo-type', default=-1, choices=[-1, 0, 1, 2],
             help="-1: randomly select per batch, 0: shuffle thickness, 1: shuffle intensity, 2: shuffle both (default: %(default)s)")
-        parser.add_argument('--annealing-epochs', default=50, type=int, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
-        parser.add_argument('--min-annealing-factor', default=0.2, type=float, help="anneal kl div in latent vars for this # epochs (default: %(default)s)")
+        parser.add_argument('--annealing-epochs', default=50, type=int, help="anneal kl div in z for this # epochs (default: %(default)s)")
+        parser.add_argument('--min-annealing-factor', default=0.2, type=float, help="anneal kl div in z starting here (default: %(default)s)")
+        parser.add_argument('--max-annealing-factor', default=1.0, type=float, help="anneal kl div in z ending here (default: %(default)s)")
         parser.add_argument('--tracegraph-elbo', default=False, action='store_true', help="use tracegraph elbo (much more computationally expensive) (default: %(default)s)")
         return parser
 

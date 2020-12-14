@@ -7,7 +7,7 @@ from pyro.distributions import (
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro.distributions.transforms import ConditionalSpline
-from pyro.distributions.transforms import householder, spline
+from pyro.distributions.transforms import spline, permute, iterated
 from pyro import poutine
 import torch
 from torch import nn
@@ -47,15 +47,16 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        self.prior_flow_components = spline(self.latent_dim)
+        prior_permutations = [permute(self.latent_dim) for _ in range(self.n_prior_flows)]
+        self.prior_flow_components = iterated(self.n_prior_flows, spline, self.latent_dim)
         self.prior_flow_transforms = [
-            self.prior_flow_components
+            x for c in zip(prior_permutations, self.prior_flow_components) for x in c
         ]
 
-        self.posterior_flow_components = householder(
-            self.latent_dim, count_transforms=self.decoder_cov_rank)
+        posterior_permutations = [permute(self.latent_dim) for _ in range(self.n_posterior_flows)]
+        self.posterior_flow_components = iterated(self.n_posterior_flows, spline, self.latent_dim)
         self.posterior_flow_transforms = [
-            self.posterior_flow_components
+            x for c in zip(posterior_permutations, self.posterior_flow_components) for x in c
         ]
 
     @pyro_method
