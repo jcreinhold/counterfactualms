@@ -266,10 +266,10 @@ class BaseVISEM(BaseSEM):
             getattr(self, name_ + 'flow_norm').scale = value.item()
         elif 'prior_flow_permutation' in name:
             i = int(name[-1])
-            self.prior_permutations[i] = value
+            self.prior_permutations[i].permutation = value
         elif 'posterior_flow_permutation' in name:
             i = int(name[-1])
-            self.posterior_permutations[i] = value
+            self.posterior_permutations[i].permutation = value
 
     def _get_preprocess_transforms(self):
         return super()._get_preprocess_transforms().inv
