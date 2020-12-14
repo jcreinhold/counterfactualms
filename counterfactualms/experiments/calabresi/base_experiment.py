@@ -180,9 +180,9 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.lesion_volume_flow_lognorm_scale = lesion_volume.log().std().to(self.torch_device).float()
 
         for i in range(self.pyro_model.n_prior_flows):
-            setattr(self.pyro_model, f'prior_flow_permutation_{i}', torch.randperm(self.pyro_model.latent_dim, dtype=torch.long, requires_grad=False).to(self.torch_device))
+            setattr(self.pyro_model, f'prior_permutation_{i}', torch.randperm(self.pyro_model.latent_dim, dtype=torch.long, requires_grad=False).to(self.torch_device))
         for i in range(self.pyro_model.n_posterior_flows):
-            setattr(self.pyro_model, f'posterior_flow_permutation_{i}', torch.randperm(self.pyro_model.latent_dim, dtype=torch.long, requires_grad=False).to(self.torch_device))
+            setattr(self.pyro_model, f'posterior_permutation_{i}', torch.randperm(self.pyro_model.latent_dim, dtype=torch.long, requires_grad=False).to(self.torch_device))
 
         if self.hparams.validate:
             logger.info(f'set age_flow_lognorm {self.pyro_model.age_flow_lognorm.loc} +/- {self.pyro_model.age_flow_lognorm.scale}')

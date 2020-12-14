@@ -47,20 +47,16 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        for i in range(self.n_prior_flows):
-            self.register_buffer(f'prior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
-        prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
+        self.prior_permutations = [Permute(torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)) for _ in range(self.n_prior_flows)]
         self.prior_flow_components = iterated(self.n_prior_flows, spline, self.latent_dim)
         self.prior_flow_transforms = [
-            x for c in zip(prior_permutations, self.prior_flow_components) for x in c
+            x for c in zip(self.prior_permutations, self.prior_flow_components) for x in c
         ]
 
-        for i in range(self.n_posterior_flows):
-            self.register_buffer(f'posterior_flow_permutation_{i}', torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False))
-        posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
+        self.posterior_permutations = [Permute(torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)) for _ in range(self.n_posterior_flows)]
         self.posterior_flow_components = iterated(self.n_posterior_flows, spline, self.latent_dim)
         self.posterior_flow_transforms = [
-            x for c in zip(posterior_permutations, self.posterior_flow_components) for x in c
+            x for c in zip(self.posterior_permutations, self.posterior_flow_components) for x in c
         ]
 
     @pyro_method
