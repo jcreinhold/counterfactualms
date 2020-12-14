@@ -114,12 +114,12 @@ def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), 
         new_state_dict[new_key] = value
     loaded_model = model_class(**model_params)
     loaded_model.load_state_dict(new_state_dict)
-    for p in loaded_model._buffers.keys():
-        if 'norm' or 'permutation' in p:
-            setattr(loaded_model, p, getattr(loaded_model, p))
-    loaded_model.eval()
     global device
     device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
+    for p in loaded_model._buffers.keys():
+        if 'norm' or 'permutation' in p:
+            setattr(loaded_model, p, getattr(loaded_model, p).to(device))
+    loaded_model.eval()
     global loaded_models
     loaded_models[exp] = loaded_model.to(device)
     global crop_size
