@@ -136,8 +136,7 @@ class ConditionalFlowVISEM(BaseVISEM):
     def guide(self, obs):
         batch_size = obs['x'].shape[0]
         with pyro.plate('observations', batch_size):
-            x = self._add_noise(obs['x'])
-            hidden = self.encoder(x)
+            hidden = self.encoder(obs['x'])
 
             ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(obs['ventricle_volume'])
             brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(obs['brain_volume'])
