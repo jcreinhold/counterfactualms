@@ -115,7 +115,7 @@ def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), 
     loaded_model = model_class(**model_params)
     loaded_model.load_state_dict(new_state_dict)
     for p in loaded_model._buffers.keys():
-        if 'norm' in p:
+        if 'norm' or 'permutation' in p:
             setattr(loaded_model, p, getattr(loaded_model, p))
     loaded_model.eval()
     global device
