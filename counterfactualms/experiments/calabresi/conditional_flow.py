@@ -6,7 +6,8 @@ from pyro.distributions import (
     Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from pyro.distributions.transforms import ConditionalSpline, conditional_householder
+from pyro.distributions.transforms import ConditionalSpline
+from pyro.distributions.transforms import householder, spline
 from pyro import poutine
 import torch
 from torch import nn
@@ -46,13 +47,13 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.score_flow_components, self.score_flow_constraint_transforms
         ]
 
-        self.prior_flow_components = conditional_spline(self.latent_dim, 3, [128, 128])
+        self.prior_flow_components = spline(self.latent_dim)
         self.prior_flow_transforms = [
             self.prior_flow_components
         ]
 
-        self.posterior_flow_components = conditional_householder(
-            self.latent_dim, 3, [128, 128], count_transforms=self.decoder_cov_rank)
+        self.posterior_flow_components = householder(
+            self.latent_dim, count_transforms=self.decoder_cov_rank)
         self.posterior_flow_transforms = [
             self.posterior_flow_components
         ]
@@ -118,7 +119,7 @@ class ConditionalFlowVISEM(BaseVISEM):
         ctx = torch.cat([ventricle_volume_, brain_volume_, lesion_volume_], 1)
 
         z_base_dist = Normal(self.z_loc, self.z_scale).to_event(1)
-        z_dist = ConditionalTransformedDistribution(z_base_dist, self.prior_flow_transforms).condition(ctx)
+        z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms)
         _ = self.prior_flow_components
         with poutine.scale(scale=self.annealing_factor):
             z = pyro.sample('z', z_dist)
@@ -144,7 +145,7 @@ class ConditionalFlowVISEM(BaseVISEM):
             hidden = torch.cat([hidden, ctx], 1)
 
             latent_base_dist = self.latent_encoder.predict(hidden)
-            latent_dist = ConditionalTransformedDistribution(latent_base_dist, self.posterior_flow_transforms).condition(ctx)
+            latent_dist = TransformedDistribution(latent_base_dist, self.posterior_flow_transforms)
             _ = self.posterior_flow_components
             with poutine.scale(scale=self.annealing_factor):
                 z = pyro.sample('z', latent_dist)
