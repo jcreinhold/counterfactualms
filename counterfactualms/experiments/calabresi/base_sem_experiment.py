@@ -460,6 +460,7 @@ class SVIExperiment(BaseCovariateExperiment):
             else:
                 clip_args['clip_norm'] = self.hparams.clip_norm
             logger.info(f'building clip args for {module_name} - {param_name} with p: {clip_args}')
+            return clip_args
 
         if loss is None:
             loss = self.svi_loss
