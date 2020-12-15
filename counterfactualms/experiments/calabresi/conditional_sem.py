@@ -5,8 +5,6 @@ from pyro.distributions import (
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
-from pyro.distributions.transforms import Permute
-from pyro.distributions.transforms import spline, iterated
 import torch
 
 from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform

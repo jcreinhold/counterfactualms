@@ -16,7 +16,6 @@ from pyro.distributions import (
     LowRankMultivariateNormal, MultivariateNormal, Normal, Laplace, TransformedDistribution  # noqa: F401
 )
 import torch
-from torch import nn
 from torch.distributions import Independent
 from torch.optim import AdamW
 
