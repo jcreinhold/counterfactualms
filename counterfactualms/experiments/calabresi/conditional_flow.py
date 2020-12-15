@@ -1,17 +1,14 @@
-from typing import Mapping
-
 import pyro
-from pyro.nn import pyro_method, DenseNN
+from pyro.nn import pyro_method
 from pyro.distributions import (
     Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
-from pyro.distributions.transforms import ConditionalSpline
 from pyro import poutine
 import torch
-from torch import nn
 
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
+from counterfactualms.pyro_modifications import conditional_spline
 
 
 class ConditionalFlowVISEM(BaseVISEM):
@@ -140,35 +137,6 @@ class ConditionalFlowVISEM(BaseVISEM):
                 z = pyro.sample('z', z_dist)
 
         return z
-
-
-def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0, order='linear'):
-
-    if hidden_dims is None:
-        hidden_dims = [input_dim * 10, input_dim * 10]
-
-    if order == 'linear':
-        net = DenseNN(context_dim,
-                     hidden_dims,
-                     param_dims=[input_dim * count_bins,
-                                 input_dim * count_bins,
-                                 input_dim * (count_bins - 1),
-                                 input_dim * count_bins],
-                     nonlinearity=nn.LeakyReLU(0.1))
-
-    elif order == 'quadratic':
-        net = DenseNN(context_dim,
-                     hidden_dims,
-                     param_dims=[input_dim * count_bins,
-                                 input_dim * count_bins,
-                                 input_dim * (count_bins - 1)],
-                     nonlinearity=nn.LeakyReLU(0.1))
-
-    else:
-        raise ValueError("Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
-            order))
-
-    return ConditionalSpline(net, input_dim, count_bins, bound=bound, order=order)
 
 
 MODEL_REGISTRY[ConditionalFlowVISEM.__name__] = ConditionalFlowVISEM

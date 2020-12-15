@@ -5,7 +5,7 @@ import numpy as np
 import pyro
 from pyro.infer import SVI, TraceGraph_ELBO, Trace_ELBO
 from pyro.nn import pyro_method
-from pyro.optim import ClippedAdam, AdagradRMSProp
+from pyro.optim import ExponentialLR, AdagradRMSProp  # noqa: F401
 from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, Spline, Permute
@@ -17,6 +17,7 @@ from pyro.distributions import (
 import torch
 from torch import nn
 from torch.distributions import Independent
+from torch.optim import AdamW
 
 from counterfactualms.arch.medical import Decoder, Encoder
 from counterfactualms.arch.nvae import Decoder as NDecoder
@@ -440,31 +441,37 @@ class SVIExperiment(BaseCovariateExperiment):
                 params = {'eta': self.hparams.eta, 'delta': self.hparams.delta, 't': self.hparams.t}
             else:
                 params = {'weight_decay': self.hparams.weight_decay,
-                          'betas': self.hparams.betas, 'eps': 1e-5,
-                          'lrd': self.hparams.lrd}
+                          'betas': self.hparams.betas, 'eps': 1e-5}
                 if 'flow_components' in module_name:
                     params['lr'] = self.hparams.pgm_lr
-                    params['clip_norm'] = self.hparams.pgm_clip_norm
                 elif any([(pn in param_name) for pn in ('affine', 'sex_logits')]):
                     params['lr'] = self.hparams.pgm_lr
-                    params['clip_norm'] = self.hparams.pgm_clip_norm
                     params['weight_decay'] = 0.
                 else:
                     params['lr'] = self.hparams.lr
-                    params['clip_norm'] = self.hparams.clip_norm
                 logger.info(f'building opt for {module_name} - {param_name} with p: {params}')
             return params
+
+        def per_param_clip_args(module_name, param_name):
+            clip_args = {}
+            if any([(pn in param_name) for pn in ('affine', 'sex_logits', 'flow_components')]):
+                clip_args['clip_norm'] = self.hparams.pgm_clip_norm
+            else:
+                clip_args['clip_norm'] = self.hparams.clip_norm
+            logger.info(f'building clip args for {module_name} - {param_name} with p: {clip_args}')
 
         if loss is None:
             loss = self.svi_loss
 
-        optimizer = AdagradRMSProp if self.hparams.use_adagrad_rmsprop else ClippedAdam
+        optimizer = AdagradRMSProp if self.hparams.use_adagrad_rmsprop else AdamW
+        scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
+                                   'clip_args': per_param_clip_args, 'gamma': self.hparams.lrd})
         if self.hparams.use_cf_guide:
             def guide(*args, **kwargs):
                 return self.pyro_model.counterfactual_guide(*args, **kwargs, counterfactual_type=self.hparams.cf_elbo_type)
-            self.svi = SVI(self.pyro_model.svi_model, guide, optimizer(per_param_callable), loss)
+            self.svi = SVI(self.pyro_model.svi_model, guide, scheduler, loss)
         else:
-            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, optimizer(per_param_callable), loss)
+            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, scheduler, loss)
         self.svi.loss_class = loss
 
     def backward(self, *args, **kwargs):
