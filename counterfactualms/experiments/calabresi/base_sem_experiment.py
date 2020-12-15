@@ -11,7 +11,7 @@ from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, Spline, Permute
 )
-from pyro.distributions.transforms import spline_coupling, iterated
+from pyro.distributions.transforms import batchnorm, spline_coupling, iterated
 from pyro.distributions import (
     LowRankMultivariateNormal, MultivariateNormal, Normal, Laplace, TransformedDistribution  # noqa: F401
 )
@@ -25,7 +25,7 @@ from counterfactualms.arch.nvae import Decoder as NDecoder
 from counterfactualms.arch.nvae import Encoder as NEncoder
 from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
-from counterfactualms.distributions.transforms.affine import LearnedAffineTransform, LowerCholeskyAffine
+from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
 from counterfactualms.distributions.deep import (
     DeepMultivariateNormal, DeepIndepNormal, DeepIndepMixtureNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
 )
@@ -257,7 +257,7 @@ class BaseVISEM(BaseSEM):
 
         coupling_kwargs = dict(hidden_dims=(self.latent_dim, self.latent_dim))
         self.use_prior_flow = self.n_prior_flows > 0
-        self.prior_affine = nn.ModuleList([LearnedAffineTransform() for _ in range(self.n_prior_flows)])
+        self.prior_affine = iterated(self.n_prior_flows, batchnorm(self.latent_dim, momentum=0.05)) if self.use_prior_flow else []
         self.prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
         self.prior_flow_components = iterated(self.n_prior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_prior_flow else []
         self.prior_flow_transforms = [
@@ -265,7 +265,7 @@ class BaseVISEM(BaseSEM):
         ]
 
         self.use_posterior_flow = self.n_posterior_flows > 0
-        self.posterior_affine = nn.ModuleList([LearnedAffineTransform() for _ in range(self.n_posterior_flows)])
+        self.posterior_affine = iterated(self.n_posterior_flows, batchnorm(self.latent_dim, momentum=0.05)) if self.use_posterior_flow else []
         self.posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
         self.posterior_flow_components = iterated(self.n_posterior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_posterior_flow else []
         self.posterior_flow_transforms = [
