@@ -257,7 +257,7 @@ class BaseVISEM(BaseSEM):
 
         coupling_kwargs = dict(hidden_dims=(self.latent_dim, self.latent_dim))
         self.use_prior_flow = self.n_prior_flows > 0
-        self.prior_affine = iterated(self.n_prior_flows, batchnorm(self.latent_dim, momentum=0.05)) if self.use_prior_flow else []
+        self.prior_affine = iterated(self.n_prior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_prior_flow else []
         self.prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
         self.prior_flow_components = iterated(self.n_prior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_prior_flow else []
         self.prior_flow_transforms = [
@@ -265,7 +265,7 @@ class BaseVISEM(BaseSEM):
         ]
 
         self.use_posterior_flow = self.n_posterior_flows > 0
-        self.posterior_affine = iterated(self.n_posterior_flows, batchnorm(self.latent_dim, momentum=0.05)) if self.use_posterior_flow else []
+        self.posterior_affine = iterated(self.n_posterior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_posterior_flow else []
         self.posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
         self.posterior_flow_components = iterated(self.n_posterior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_posterior_flow else []
         self.posterior_flow_transforms = [
