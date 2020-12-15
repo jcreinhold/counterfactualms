@@ -465,7 +465,7 @@ class SVIExperiment(BaseCovariateExperiment):
 
         optimizer = AdagradRMSProp if self.hparams.use_adagrad_rmsprop else AdamW
         scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
-                                   'clip_args': per_param_clip_args, 'gamma': self.hparams.lrd})
+                                   'gamma': self.hparams.lrd}, clip_args=per_param_clip_args)
         if self.hparams.use_cf_guide:
             def guide(*args, **kwargs):
                 return self.pyro_model.counterfactual_guide(*args, **kwargs, counterfactual_type=self.hparams.cf_elbo_type)
