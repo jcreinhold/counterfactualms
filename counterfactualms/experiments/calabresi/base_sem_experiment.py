@@ -11,7 +11,7 @@ from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, Spline, Permute
 )
-from pyro.distributions.transforms import batchnorm, spline_coupling, spline_autoregressive, iterated
+from pyro.distributions.transforms import batchnorm, iterated
 from pyro.distributions import (
     LowRankMultivariateNormal, MultivariateNormal, Normal, Laplace, TransformedDistribution  # noqa: F401
 )
@@ -25,6 +25,7 @@ from counterfactualms.arch.nvae import Encoder as NEncoder
 from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
 from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
+from counterfactualms.pyro_modifications import spline_autoregressive, spline_coupling
 from counterfactualms.distributions.deep import (
     DeepMultivariateNormal, DeepIndepNormal, DeepIndepMixtureNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
 )
@@ -76,7 +77,7 @@ class BaseVISEM(BaseSEM):
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, use_weight_norm=False, use_spectral_norm=False, laplace_likelihood=False,
-                 eps=0.1, n_prior_flows=3, n_posterior_flows=3, use_autoregressive=False, **kwargs):
+                 eps=0.1, n_prior_flows=3, n_posterior_flows=3, use_autoregressive=False, use_swish=False, **kwargs):
         super().__init__(**kwargs)
         self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
@@ -97,6 +98,7 @@ class BaseVISEM(BaseSEM):
         self.n_prior_flows = n_prior_flows
         self.n_posterior_flows = n_posterior_flows
         self.use_autoregressive = use_autoregressive
+        self.use_swish = use_swish
         self.annealing_factor = 1.  # initialize here; will be changed during training
 
         # decoder parts
@@ -191,7 +193,7 @@ class BaseVISEM(BaseSEM):
 
         latent_layers = torch.nn.Sequential(
             torch.nn.Linear(self.latent_dim + self.context_dim, self.latent_dim),
-            torch.nn.ReLU() if not self.use_nvae else Swish()
+            torch.nn.LeakyReLU(0.1) if not self.use_nvae else Swish()
         )
 
         if self.posterior_components > 1:
@@ -255,7 +257,7 @@ class BaseVISEM(BaseSEM):
         self.score_flow_eps = AffineTransform(loc=-eps, scale=1.)
         self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform(), self.score_flow_eps])
 
-        spline_kwargs = dict(hidden_dims=(2*self.latent_dim, 2*self.latent_dim))
+        spline_kwargs = dict(hidden_dims=(2*self.latent_dim, 2*self.latent_dim), use_swish=self.use_nvae)
         spline_ = spline_autoregressive if self.use_autoregressive else spline_coupling
         self.use_prior_flow = self.n_prior_flows > 0
         self.prior_affine = iterated(self.n_prior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_prior_flow else []
@@ -421,6 +423,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--n-prior-flows', default=3, type=int, help="use this number of flows for prior in flow net (default: %(default)s)")
         parser.add_argument('--n-posterior-flows', default=3, type=int, help="use this number of flows for posterior in flow net (default: %(default)s)")
         parser.add_argument('--use-autoregressive', default=False, action='store_true', help="use autoregressive spline for prior/post instead of coupling (default: %(default)s)")
+        parser.add_argument('--use-swish', default=False, action='store_true', help="use swish in spline for nonlinearity (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
             choices=['fixed_var', 'learned_var', 'independent_var', 'sharedvar_multivariate_gaussian',

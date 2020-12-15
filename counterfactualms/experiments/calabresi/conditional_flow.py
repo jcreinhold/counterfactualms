@@ -6,7 +6,9 @@ from pyro.distributions import (
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
 import torch
+from torch import nn
 
+from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 from counterfactualms.pyro_modifications import conditional_spline
 
@@ -18,27 +20,29 @@ class ConditionalFlowVISEM(BaseVISEM):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.brain_volume_flow_components = conditional_spline(1, 2, [8, 16])
+        nonlinearity = Swish() if self.use_swish else nn.LeakyReLU(0.1)
+
+        self.brain_volume_flow_components = conditional_spline(1, 2, [8, 16], nonlinearity=nonlinearity)
         self.brain_volume_flow_transforms = [
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
         ]
 
-        self.ventricle_volume_flow_components = conditional_spline(1, 3, [8, 16])
+        self.ventricle_volume_flow_components = conditional_spline(1, 3, [8, 16], nonlinearity=nonlinearity)
         self.ventricle_volume_flow_transforms = [
             self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
         ]
 
-        self.lesion_volume_flow_components = conditional_spline(1, 4, [16, 32])
+        self.lesion_volume_flow_components = conditional_spline(1, 4, [16, 32], nonlinearity=nonlinearity)
         self.lesion_volume_flow_transforms = [
             self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
         ]
 
-        self.duration_flow_components = conditional_spline(1, 2, [8, 16])
+        self.duration_flow_components = conditional_spline(1, 2, [8, 16], nonlinearity=nonlinearity)
         self.duration_flow_transforms = [
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        self.score_flow_components = conditional_spline(1, 4, [16, 32])
+        self.score_flow_components = conditional_spline(1, 4, [16, 32], nonlinearity=nonlinearity)
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
         ]

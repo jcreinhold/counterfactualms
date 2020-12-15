@@ -6,7 +6,9 @@ from pyro.distributions import (
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
 import torch
+from torch import nn
 
+from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
 
@@ -18,31 +20,33 @@ class ConditionalVISEM(BaseVISEM):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        brain_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        nonlinearity = Swish() if self.use_swish else nn.LeakyReLU(0.1)
+
+        brain_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.brain_volume_flow_components = ConditionalAffineTransform(context_nn=brain_volume_net, event_dim=0)
         self.brain_volume_flow_transforms = [
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
         ]
 
-        ventricle_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        ventricle_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.ventricle_volume_flow_components = ConditionalAffineTransform(context_nn=ventricle_volume_net, event_dim=0)
         self.ventricle_volume_flow_transforms = [
             self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
         ]
 
-        lesion_volume_net = DenseNN(4, [16, 32], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        lesion_volume_net = DenseNN(4, [16, 32], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.lesion_volume_flow_components = ConditionalAffineTransform(context_nn=lesion_volume_net, event_dim=0)
         self.lesion_volume_flow_transforms = [
             self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
         ]
 
-        duration_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        duration_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.duration_flow_components = ConditionalAffineTransform(context_nn=duration_net, event_dim=0)
         self.duration_flow_transforms = [
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        score_net = DenseNN(4, [10, 20], param_dims=[1, 1], nonlinearity=torch.nn.LeakyReLU(.1))
+        score_net = DenseNN(4, [16, 32], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.score_flow_components = ConditionalAffineTransform(context_nn=score_net, event_dim=0)
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
