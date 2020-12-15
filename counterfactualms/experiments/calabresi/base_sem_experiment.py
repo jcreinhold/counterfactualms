@@ -11,7 +11,7 @@ from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms import (
     ComposeTransform, AffineTransform, ExpTransform, Spline, Permute
 )
-from pyro.distributions.transforms import batchnorm, spline_coupling, iterated
+from pyro.distributions.transforms import batchnorm, spline_coupling, spline_autoregressive, iterated
 from pyro.distributions import (
     LowRankMultivariateNormal, MultivariateNormal, Normal, Laplace, TransformedDistribution  # noqa: F401
 )
@@ -76,7 +76,7 @@ class BaseVISEM(BaseSEM):
                  dec_filters:Tuple[int]=(128,64,32,16), num_convolutions:int=3, use_upconv:bool=False,
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, use_weight_norm=False, use_spectral_norm=False, laplace_likelihood=False,
-                 eps=0.1, n_prior_flows=3, n_posterior_flows=3, **kwargs):
+                 eps=0.1, n_prior_flows=3, n_posterior_flows=3, use_autoregressive=False, **kwargs):
         super().__init__(**kwargs)
         self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
@@ -96,6 +96,7 @@ class BaseVISEM(BaseSEM):
         self.eps = eps
         self.n_prior_flows = n_prior_flows
         self.n_posterior_flows = n_posterior_flows
+        self.use_autoregressive = use_autoregressive
         self.annealing_factor = 1.  # initialize here; will be changed during training
 
         # decoder parts
@@ -254,11 +255,12 @@ class BaseVISEM(BaseSEM):
         self.score_flow_eps = AffineTransform(loc=-eps, scale=1.)
         self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform(), self.score_flow_eps])
 
-        coupling_kwargs = dict(hidden_dims=(self.latent_dim, self.latent_dim))
+        spline_kwargs = dict(hidden_dims=(2*self.latent_dim, 2*self.latent_dim))
+        spline_ = spline_autoregressive if self.use_autoregressive else spline_coupling
         self.use_prior_flow = self.n_prior_flows > 0
         self.prior_affine = iterated(self.n_prior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_prior_flow else []
         self.prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
-        self.prior_flow_components = iterated(self.n_prior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_prior_flow else []
+        self.prior_flow_components = iterated(self.n_prior_flows, spline_, self.latent_dim, **spline_kwargs) if self.use_prior_flow else []
         self.prior_flow_transforms = [
             x for c in zip(self.prior_permutations, self.prior_affine, self.prior_flow_components) for x in c
         ]
@@ -266,7 +268,7 @@ class BaseVISEM(BaseSEM):
         self.use_posterior_flow = self.n_posterior_flows > 0
         self.posterior_affine = iterated(self.n_posterior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_posterior_flow else []
         self.posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
-        self.posterior_flow_components = iterated(self.n_posterior_flows, spline_coupling, self.latent_dim, **coupling_kwargs) if self.use_posterior_flow else []
+        self.posterior_flow_components = iterated(self.n_posterior_flows, spline_, self.latent_dim, **spline_kwargs) if self.use_posterior_flow else []
         self.posterior_flow_transforms = [
             x for c in zip(self.posterior_permutations, self.posterior_affine, self.posterior_flow_components) for x in c
         ]
@@ -418,6 +420,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--laplace-likelihood', default=False, action='store_true', help="use laplace likelihood for image (default: %(default)s)")
         parser.add_argument('--n-prior-flows', default=3, type=int, help="use this number of flows for prior in flow net (default: %(default)s)")
         parser.add_argument('--n-posterior-flows', default=3, type=int, help="use this number of flows for posterior in flow net (default: %(default)s)")
+        parser.add_argument('--use-autoregressive', default=False, action='store_true', help="use autoregressive spline for prior/post instead of coupling (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
             choices=['fixed_var', 'learned_var', 'independent_var', 'sharedvar_multivariate_gaussian',
