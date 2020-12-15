@@ -282,25 +282,27 @@ class BaseVISEM(BaseSEM):
             self.prior_affine = iterated(self.n_prior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_prior_flow else []
             self.prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
             self.prior_flow_components = iterated(self.n_prior_flows, flow_, self.latent_dim, **flow_kwargs) if self.use_prior_flow else []
+            self.prior_flow_transforms = [
+                x for c in zip(self.prior_permutations, self.prior_affine, self.prior_flow_components) for x in c
+            ]
         else:
             self.prior_affine = []
             self.prior_permutations = []
             self.prior_flow_components = flow_(self.latent_dim, **flow_kwargs) if self.use_prior_flow else []
-        self.prior_flow_transforms = [
-            x for c in zip(self.prior_permutations, self.prior_affine, self.prior_flow_components) for x in c
-        ]
+            self.prior_flow_transforms = [self.prior_flow_components]
 
         if self.use_posterior_permuatations:
             self.posterior_affine = iterated(self.n_posterior_flows, batchnorm, self.latent_dim, momentum=0.05)
             self.posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
             self.posterior_flow_components = iterated(self.n_posterior_flows, flow_, self.latent_dim, **flow_kwargs)
+            self.posterior_flow_transforms = [
+                x for c in zip(self.posterior_permutations, self.posterior_affine, self.posterior_flow_components) for x in c
+            ]
         else:
             self.posterior_affine = []
             self.posterior_permutations = []
             self.posterior_flow_components = flow_(self.latent_dim, **flow_kwargs) if self.use_posterior_flow else []
-        self.posterior_flow_transforms = [
-            x for c in zip(self.posterior_permutations, self.posterior_affine, self.posterior_flow_components) for x in c
-        ]
+            self.posterior_flow_transforms = [self.posterior_flow_components]
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
