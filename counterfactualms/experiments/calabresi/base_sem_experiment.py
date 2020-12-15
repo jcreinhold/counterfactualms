@@ -443,9 +443,14 @@ class SVIExperiment(BaseCovariateExperiment):
             else:
                 params = {'weight_decay': self.hparams.weight_decay,
                           'betas': self.hparams.betas, 'eps': 1e-5}
-                if 'flow_components' in module_name:
+                if any([(pn in module_name) for pn in ('prior_flow', 'posterior_flow')]):
+                    params['lr'] = self.hparams.lr
+                elif 'affine' in module_name:
+                    params['lr'] = self.hparams.lr
+                    params['weight_decay'] = 0.
+                elif 'flow_components' in module_name:
                     params['lr'] = self.hparams.pgm_lr
-                elif any([(pn in param_name) for pn in ('affine', 'sex_logits')]):
+                elif 'sex_logits' in param_name:
                     params['lr'] = self.hparams.pgm_lr
                     params['weight_decay'] = 0.
                 else:
