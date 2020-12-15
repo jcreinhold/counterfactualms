@@ -568,7 +568,7 @@ class SVIExperiment(BaseCovariateExperiment):
             max_af = self.hparams.max_annealing_factor
             self.pyro_model.annealing_factor = min_af + (max_af - min_af) * \
                                (float(batch_idx + self.current_epoch * n_batches_per_epoch + 1) /
-                                float(self.hparams.annealing_epochs))
+                                float(self.hparams.annealing_epochs * n_batches_per_epoch))
         else:
             self.pyro_model.annealing_factor = self.hparams.max_annealing_factor
 
