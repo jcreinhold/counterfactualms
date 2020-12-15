@@ -477,7 +477,9 @@ class SVIExperiment(BaseCovariateExperiment):
 
         def per_param_clip_args(module_name, param_name):
             clip_args = defaultdict(lambda: None)
-            if any([(pn in param_name) for pn in ('affine', 'sex_logits', 'flow_components')]):
+            if any([(pn in module_name) for pn in ('prior_flow', 'posterior_flow')]):
+                clip_args['clip_norm'] = self.hparams.flow_clip_norm
+            elif any([(pn in param_name) for pn in ('affine', 'sex_logits', 'flow_components')]):
                 clip_args['clip_norm'] = self.hparams.pgm_clip_norm
             else:
                 clip_args['clip_norm'] = self.hparams.clip_norm
