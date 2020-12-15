@@ -506,6 +506,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         parser.add_argument('--weight-decay', default=0., type=float, help="weight decay for adam (default: %(default)s)")
         parser.add_argument('--betas', default=(0.9,0.999), type=float, nargs=2, help="betas for adam (default: %(default)s)")
         parser.add_argument('--clip-norm', default=100., type=float, help="clip norm for grad for adam (default: %(default)s)")
+        parser.add_argument('--pgm-clip-norm', default=10., type=float, help="clip norm for grad for adam in pgm (default: %(default)s)")
         parser.add_argument('--lrd', default=0.9999, type=float, help="learning rate decay for adam (default: %(default)s)")
         parser.add_argument('--use-adagrad-rmsprop', default=False, action='store_true', help="use adagrad-rmsprop mashup (default: %(default)s)")
         parser.add_argument('--eta', default=1.0, type=float, help="eta in adagrad-rmsprop mashup (default: %(default)s)")

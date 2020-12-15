@@ -441,12 +441,18 @@ class SVIExperiment(BaseCovariateExperiment):
             else:
                 params = {'weight_decay': self.hparams.weight_decay,
                           'betas': self.hparams.betas, 'eps': 1e-5,
-                          'clip_norm': self.hparams.clip_norm, 'lrd': self.hparams.lrd}
-                if 'flow_components' in module_name or 'sex_logits' in param_name:
+                          'lrd': self.hparams.lrd}
+                if 'flow_components' in module_name:
                     params['lr'] = self.hparams.pgm_lr
+                    params['clip_norm'] = self.hparams.pgm_clip_norm
+                elif any([(pn in param_name) for pn in ('affine', 'sex_logits')]):
+                    params['lr'] = self.hparams.pgm_lr
+                    params['clip_norm'] = self.hparams.pgm_clip_norm
+                    params['weight_decay'] = 0.
                 else:
                     params['lr'] = self.hparams.lr
-            logger.info(f'building opt for {module_name} - {param_name} with p: {params}')
+                    params['clip_norm'] = self.hparams.clip_norm
+                logger.info(f'building opt for {module_name} - {param_name} with p: {params}')
             return params
 
         if loss is None:
