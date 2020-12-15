@@ -234,14 +234,14 @@ class BaseVISEM(BaseSEM):
         perm = lambda: torch.randperm(self.latent_dim, dtype=torch.long, requires_grad=False)
 
         self.use_prior_flow = self.n_prior_flows > 0
-        self.use_prior_permuatations = self.n_prior_flows > 1
-        if self.use_prior_permuatations:
+        self.use_prior_permutations = self.n_prior_flows > 1
+        if self.use_prior_permutations:
             for i in range(self.n_prior_flows):
                 self.register_buffer(f'prior_flow_permutation_{i}', perm())
 
         self.use_posterior_flow = self.n_posterior_flows > 0
-        self.use_posterior_permuatations = self.n_posterior_flows > 1
-        if self.use_posterior_permuatations:
+        self.use_posterior_permutations = self.n_posterior_flows > 1
+        if self.use_posterior_permutations:
             for i in range(self.n_posterior_flows):
                 self.register_buffer(f'posterior_flow_permutation_{i}', perm())
 
@@ -278,7 +278,7 @@ class BaseVISEM(BaseSEM):
             flow_ = affine_autoregressive if self.use_autoregressive else affine_coupling
             flow_kwargs['stable'] = self.use_stable
 
-        if self.use_prior_permuatations:
+        if self.use_prior_permutations:
             self.prior_affine = iterated(self.n_prior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_prior_flow else []
             self.prior_permutations = [Permute(getattr(self, f'prior_flow_permutation_{i}')) for i in range(self.n_prior_flows)]
             self.prior_flow_components = iterated(self.n_prior_flows, flow_, self.latent_dim, **flow_kwargs) if self.use_prior_flow else []
@@ -291,7 +291,7 @@ class BaseVISEM(BaseSEM):
             self.prior_flow_components = flow_(self.latent_dim, **flow_kwargs) if self.use_prior_flow else []
             self.prior_flow_transforms = [self.prior_flow_components]
 
-        if self.use_posterior_permuatations:
+        if self.use_posterior_permutations:
             self.posterior_affine = iterated(self.n_posterior_flows, batchnorm, self.latent_dim, momentum=0.05)
             self.posterior_permutations = [Permute(getattr(self, f'posterior_flow_permutation_{i}')) for i in range(self.n_posterior_flows)]
             self.posterior_flow_components = iterated(self.n_posterior_flows, flow_, self.latent_dim, **flow_kwargs)
