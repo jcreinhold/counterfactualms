@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 from typing import Mapping, Tuple
 
@@ -453,7 +454,7 @@ class SVIExperiment(BaseCovariateExperiment):
             return params
 
         def per_param_clip_args(module_name, param_name):
-            clip_args = {}
+            clip_args = defaultdict(lambda: None)
             if any([(pn in param_name) for pn in ('affine', 'sex_logits', 'flow_components')]):
                 clip_args['clip_norm'] = self.hparams.pgm_clip_norm
             else:
