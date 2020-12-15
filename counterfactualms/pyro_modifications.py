@@ -50,7 +50,7 @@ def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, b
 
 def spline_autoregressive(input_dim, hidden_dims=None, count_bins=8, bound=3.0, order='linear', nonlinearity=nn.LeakyReLU(0.1)):
     if hidden_dims is None:
-        hidden_dims = [input_dim * 10, input_dim * 10]
+        hidden_dims = [3 * input_dim + 1]
     param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
     arn = AutoRegressiveNN(input_dim, hidden_dims, param_dims=param_dims, nonlinearity=nonlinearity)
     return SplineAutoregressive(input_dim, arn, count_bins=count_bins, bound=bound, order=order)

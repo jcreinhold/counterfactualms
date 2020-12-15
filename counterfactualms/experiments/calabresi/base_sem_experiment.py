@@ -262,7 +262,8 @@ class BaseVISEM(BaseSEM):
         self.score_flow_eps = AffineTransform(loc=-eps, scale=1.)
         self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform(), self.score_flow_eps])
 
-        flow_kwargs = dict(hidden_dims=(2*self.latent_dim, 2*self.latent_dim), nonlinearity=nonlinearity)
+        hidden_dims = (3 * self.latent_dim + 1,) if self.use_autoregressive else (2*self.latent_dim, 2*self.latent_dim)
+        flow_kwargs = dict(hidden_dims=hidden_dims, nonlinearity=nonlinearity)
         if self.use_spline:
             flow_ = spline_autoregressive if self.use_autoregressive else spline_coupling
         else:
