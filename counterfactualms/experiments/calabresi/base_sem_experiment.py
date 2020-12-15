@@ -191,9 +191,10 @@ class BaseVISEM(BaseSEM):
                 use_spectral_norm = self.use_spectral_norm
             )
 
+        nonlinearity = Swish() if self.use_swish else torch.nn.LeakyReLU(0.1)
         latent_layers = torch.nn.Sequential(
             torch.nn.Linear(self.latent_dim + self.context_dim, self.latent_dim),
-            torch.nn.LeakyReLU(0.1) if not self.use_nvae else Swish()
+            nonlinearity
         )
 
         if self.posterior_components > 1:
@@ -257,7 +258,7 @@ class BaseVISEM(BaseSEM):
         self.score_flow_eps = AffineTransform(loc=-eps, scale=1.)
         self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform(), self.score_flow_eps])
 
-        spline_kwargs = dict(hidden_dims=(2*self.latent_dim, 2*self.latent_dim), use_swish=self.use_nvae)
+        spline_kwargs = dict(hidden_dims=(2*self.latent_dim, 2*self.latent_dim), nonlinearity=nonlinearity)
         spline_ = spline_autoregressive if self.use_autoregressive else spline_coupling
         self.use_prior_flow = self.n_prior_flows > 0
         self.prior_affine = iterated(self.n_prior_flows, batchnorm, self.latent_dim, momentum=0.05) if self.use_prior_flow else []
