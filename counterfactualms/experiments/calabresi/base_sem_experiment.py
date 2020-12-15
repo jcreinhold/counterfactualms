@@ -551,20 +551,23 @@ class SVIExperiment(BaseCovariateExperiment):
                 out[k] = batch[k].unsqueeze(1).float()
         return out
 
-    def _set_annealing_factor(self):
+    def _set_annealing_factor(self, batch_idx=None):
+        n_batches_per_epoch = len(self.calabresi_train) // self.train_batch_size
+        if batch_idx is None:
+            batch_idx = n_batches_per_epoch
         not_in_sanity_check = self.hparams.annealing_epochs > 0
         in_annealing_epochs = self.current_epoch < self.hparams.annealing_epochs
         if not_in_sanity_check and in_annealing_epochs and self.training:
             min_af = self.hparams.min_annealing_factor
             max_af = self.hparams.max_annealing_factor
             self.pyro_model.annealing_factor = min_af + (max_af - min_af) * \
-                               (float(self.current_epoch + 1) /
+                               (float(batch_idx + self.current_epoch * n_batches_per_epoch + 1) /
                                 float(self.hparams.annealing_epochs))
         else:
             self.pyro_model.annealing_factor = self.hparams.max_annealing_factor
 
     def training_step(self, batch, batch_idx):
-        self._set_annealing_factor()
+        self._set_annealing_factor(batch_idx)
         batch = self.prep_batch(batch)
         if self.hparams.validate:
             logging.info('Validation:')
