@@ -60,6 +60,7 @@ def main():
         os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpus)
         args.gpus = 1
 
+
     groups = {}
     for group in parser._action_groups:
         group_dict = {a.dest: getattr(args, a.dest, None) for a in group._group_actions}
@@ -75,6 +76,8 @@ def main():
 
     for k, v in vars(model_params).items():
         setattr(hparams, k, v)
+
+    setattr(hparams, 'n_epochs', args.max_epochs)
 
     callbacks = [ModelCheckpoint(
         monitor='score',

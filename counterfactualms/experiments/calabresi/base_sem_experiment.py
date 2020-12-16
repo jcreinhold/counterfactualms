@@ -516,7 +516,7 @@ class SVIExperiment(BaseCovariateExperiment):
                                        'gamma': self.hparams.lrd}, clip_args=per_param_clip_args)
         else:
             scheduler = OneCycleLR({'optimizer': optimizer, 'optim_args': per_param_callable,
-                                    'epochs': self.max_epochs, 'steps_per_epoch': self._steps_per_epoch(),
+                                    'epochs': self.hparams.n_epochs, 'steps_per_epoch': self._steps_per_epoch(),
                                     'pct_start': self.hparams.pct_start, 'div_factor': self.hparams.div_factor,
                                     'final_div_factor': self.hparams.final_div_factor}, clip_args=per_param_clip_args)
         if self.hparams.use_cf_guide:
