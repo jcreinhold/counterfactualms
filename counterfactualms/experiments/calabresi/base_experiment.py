@@ -145,7 +145,6 @@ class BaseCovariateExperiment(pl.LightningModule):
             torch.autograd.set_detect_anomaly(self.hparams.validate)
             pyro.enable_validation()
 
-    def prepare_data(self):
         resize = None if self.hparams.resize == (0,0) else self.hparams.resize
         train_crop_type = self.hparams.train_crop_type if hasattr(self.hparams, 'train_crop_type') else 'random'
         crop_size = self.hparams.crop_size if hasattr(self.hparams, 'crop_size') else (224, 224)
