@@ -152,7 +152,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_size=crop_size, crop_type='center', resize=resize)
         self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_size=crop_size, crop_type='center', resize=resize)
 
-    def perpare_data(self):
+    def prepare_data(self):
         self.torch_device = self.trainer.root_gpu if self.trainer.on_gpu else self.trainer.root_device
 
         age = torch.from_numpy(self.calabresi_train.csv['age'].to_numpy())
