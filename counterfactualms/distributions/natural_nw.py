@@ -5,7 +5,7 @@ from torch.distributions import constraints
 from .mvt import MultivariateStudentT
 from .natural_mvn import NaturalMultivariateNormal
 from .wishart import Wishart
-from counterfactualms.util import cholseky_inverse, mahalanobis, matvec, outer, posdef_inverse, triangular_logdet
+from counterfactualms.utils import cholseky_inverse, mahalanobis, matvec, outer, posdef_inverse, triangular_logdet
 
 
 class _Symmetric(constraints.Constraint):

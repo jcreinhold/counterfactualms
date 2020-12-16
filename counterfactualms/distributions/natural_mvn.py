@@ -7,7 +7,7 @@ from torch.distributions.utils import lazy_property
 
 from counterfactualms.distributions.multivariate import MultivariateDistribution
 from counterfactualms.distributions.mvn import MultivariateNormal
-from counterfactualms.util import inverse_cholesky, mahalanobis, matvec, triangular_logdet
+from counterfactualms.utils import inverse_cholesky, mahalanobis, matvec, triangular_logdet
 
 _LOG_2PI = math.log(2. * math.pi)
 

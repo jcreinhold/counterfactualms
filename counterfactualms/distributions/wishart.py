@@ -6,7 +6,7 @@ from torch.distributions import constraints
 from torch.distributions.exp_family import ExponentialFamily
 from torch.distributions.utils import lazy_property
 
-from counterfactualms import util
+from counterfactualms import utils
 
 
 def mvdigamma(x: torch.Tensor, p: int) -> torch.Tensor:
@@ -49,7 +49,7 @@ class Wishart(TorchDistribution, ExponentialFamily):
 
     @lazy_property
     def scale_tril(self):
-        return util.inverse_cholesky(2. * self.scale)
+        return utils.inverse_cholesky(2. * self.scale)
 
     def rsample(self, sample_shape=torch.Size()):
         """
@@ -82,26 +82,26 @@ class Wishart(TorchDistribution, ExponentialFamily):
     def _log_normalizer(self, eta1, eta2):
         D = self.event_shape[-1]
         a = -eta1 - .5 * (D + 1)
-        return torch.mvlgamma(a, D) - a * util.posdef_logdet(-eta2)[0]
+        return torch.mvlgamma(a, D) - a * utils.posdef_logdet(-eta2)[0]
 
     @lazy_property
     def log_normalizer(self):
         D = self.event_shape[-1]
         return torch.mvlgamma(self.concentration, D) + self.concentration \
-            * (D * math.log(2.) + 2. * util.triangular_logdet(self.scale_tril))
+            * (D * math.log(2.) + 2. * utils.triangular_logdet(self.scale_tril))
 
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
         D = self.event_shape[-1]
-        logdet = util.posdef_logdet(value)[0]
+        logdet = utils.posdef_logdet(value)[0]
         prod = (self.scale * value).sum(dim=(-2, -1))
         return (self.concentration - .5 * (D + 1)) * logdet - prod - self.log_normalizer
 
     def expected_logdet(self):
         D = self.event_shape[-1]
         return mvdigamma(self.concentration, D) + D * math.log(2.) \
-            + 2. * util.triangular_logdet(self.scale_tril)
+               + 2. * utils.triangular_logdet(self.scale_tril)
 
     def variance_logdet(self):
         return mvtrigamma(self.concentration, self.event_shape[-1])

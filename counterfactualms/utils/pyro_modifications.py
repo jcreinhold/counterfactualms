@@ -1,5 +1,5 @@
 import operator
-from functools import partial, reduce
+from functools import reduce
 
 from torch import nn
 from pyro.distributions.transforms import AffineCoupling, AffineAutoregressive

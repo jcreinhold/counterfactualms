@@ -1,7 +1,7 @@
 import pyro
 from pyro.nn import pyro_method
 from pyro.distributions import (
-    Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
+    Normal, Bernoulli, TransformedDistribution  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
@@ -10,7 +10,7 @@ from torch import nn
 
 from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
-from counterfactualms.pyro_modifications import conditional_spline
+from counterfactualms.utils.pyro_modifications import conditional_spline
 
 
 class ConditionalFlowVISEM(BaseVISEM):

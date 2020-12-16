@@ -25,13 +25,14 @@ from counterfactualms.arch.nvae import Encoder as NEncoder
 from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.distributions.transforms.reshape import ReshapeTransform
 from counterfactualms.distributions.transforms.affine import LowerCholeskyAffine
-from counterfactualms.pyro_modifications import affine_autoregressive, affine_coupling
-from counterfactualms.pyro_modifications import spline_autoregressive, spline_coupling
+from counterfactualms.utils.optim import OneCycleLR
+from counterfactualms.utils.pyro_modifications import affine_autoregressive, affine_coupling
+from counterfactualms.utils.pyro_modifications import spline_autoregressive, spline_coupling
 from counterfactualms.distributions.deep import (
     DeepMultivariateNormal, DeepIndepNormal, DeepIndepMixtureNormal, Conv2dIndepNormal, DeepLowRankMultivariateNormal
 )
 from counterfactualms.experiments.calabresi.base_experiment import (
-    BaseCovariateExperiment, BaseSEM, EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
+    BaseCovariateExperiment, BaseSEM, EXPERIMENT_REGISTRY  # noqa: F401
 )
 
 logger = logging.getLogger(__name__)
@@ -509,8 +510,14 @@ class SVIExperiment(BaseCovariateExperiment):
             loss = self.svi_loss
 
         optimizer = AdagradRMSProp if self.hparams.use_adagrad_rmsprop else AdamW
-        scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
-                                   'gamma': self.hparams.lrd}, clip_args=per_param_clip_args)
+        if self.hparams.use_exponential_lr:
+            scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
+                                       'gamma': self.hparams.lrd}, clip_args=per_param_clip_args)
+        else:
+            scheduler = OneCycleLR({'optimizer': optimizer, 'optim_args': per_param_callable,
+                                    'epochs': self.max_epochs, 'steps_per_epoch': self._steps_per_epoch(),
+                                    'pct_start': self.hparams.pct_start, 'div_factor': self.hparams.div_factor,
+                                    'final_div_factor': self.hparams.final_div_factor}, clip_args=per_param_clip_args)
         if self.hparams.use_cf_guide:
             def guide(*args, **kwargs):
                 return self.pyro_model.counterfactual_guide(*args, **kwargs, counterfactual_type=self.hparams.cf_elbo_type)
@@ -589,18 +596,21 @@ class SVIExperiment(BaseCovariateExperiment):
                 out[k] = batch[k].unsqueeze(1).float()
         return out
 
+    def _steps_per_epoch(self):
+        return len(self.calabresi_train) // self.train_batch_size  # integer div b/c drop_last used
+
     def _set_annealing_factor(self, batch_idx=None):
-        n_batches_per_epoch = len(self.calabresi_train) // self.train_batch_size
+        steps_per_epoch = self._steps_per_epoch()
         if batch_idx is None:
-            batch_idx = n_batches_per_epoch
+            batch_idx = steps_per_epoch
         not_in_sanity_check = self.hparams.annealing_epochs > 0
         in_annealing_epochs = self.current_epoch < self.hparams.annealing_epochs
         if not_in_sanity_check and in_annealing_epochs and self.training:
             min_af = self.hparams.min_annealing_factor
             max_af = self.hparams.max_annealing_factor
             self.pyro_model.annealing_factor = min_af + (max_af - min_af) * \
-                               (float(batch_idx + self.current_epoch * n_batches_per_epoch + 1) /
-                                float(self.hparams.annealing_epochs * n_batches_per_epoch))
+                               (float(batch_idx + self.current_epoch * steps_per_epoch + 1) /
+                                float(self.hparams.annealing_epochs * steps_per_epoch))
         else:
             self.pyro_model.annealing_factor = self.hparams.max_annealing_factor
 
