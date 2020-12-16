@@ -10,7 +10,7 @@ from torch.distributions import Distribution, Categorical, MultivariateNormal
 from counterfactualms.distributions.factorised import Factorised
 from counterfactualms.distributions.multivariate import MultivariateDistribution
 from counterfactualms.distributions.natural_mvn import NaturalMultivariateNormal
-from counterfactualms.utils import posdef_solve
+from counterfactualms.utils.linalg import posdef_solve
 
 _PROD_REGISTRY = {}
 

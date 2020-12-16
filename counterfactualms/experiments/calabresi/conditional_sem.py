@@ -10,7 +10,8 @@ from torch import nn
 
 from counterfactualms.arch.thirdparty.neural_operations import Swish
 from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
-from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
+from counterfactualms.experiments.calabresi.base_experiment import MODEL_REGISTRY
+from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM
 
 
 class ConditionalVISEM(BaseVISEM):

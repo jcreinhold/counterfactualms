@@ -4,10 +4,10 @@ import torch
 from pyro.distributions import Categorical, TorchDistribution
 from torch import nn
 
-from .factorised import Factorised
-from .mixture import Mixture
-from .mvn import MultivariateNormal
-from .multivariate import MultivariateDistribution
+from counterfactualms.distributions.factorised import Factorised
+from counterfactualms.distributions.mixture import Mixture
+from counterfactualms.distributions.mvn import MultivariateNormal
+from counterfactualms.distributions.multivariate import MultivariateDistribution
 
 T = TypeVar('T', bound=TorchDistribution)
 M = TypeVar('M', bound=MultivariateDistribution)

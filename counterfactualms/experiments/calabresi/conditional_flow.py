@@ -9,7 +9,8 @@ import torch
 from torch import nn
 
 from counterfactualms.arch.thirdparty.neural_operations import Swish
-from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM, MODEL_REGISTRY
+from counterfactualms.experiments.calabresi.base_experiment import MODEL_REGISTRY
+from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM
 from counterfactualms.utils.pyro_modifications import conditional_spline
 
 

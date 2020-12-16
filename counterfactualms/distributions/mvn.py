@@ -2,7 +2,7 @@ import torch
 import torch.distributions as td
 
 from counterfactualms.distributions.multivariate import MultivariateDistribution
-from counterfactualms.utils import matvec, posdef_inverse
+from counterfactualms.utils.linalg import matvec, posdef_inverse
 
 
 class MultivariateNormal(MultivariateDistribution, td.MultivariateNormal):
