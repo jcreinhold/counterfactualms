@@ -143,4 +143,4 @@ class _OneCycleLR(_LRScheduler):
         return lrs
 
 
-OneCycleLR = partial(PyroLRScheduler, scheduler_constructor=_OneCycleLR)
+OneCycleLR = lambda optim_args, clip_args=None: PyroLRScheduler(_OneCycleLR, optim_args, clip_args)
