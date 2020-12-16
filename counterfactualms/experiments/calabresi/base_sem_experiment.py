@@ -277,6 +277,7 @@ class BaseVISEM(BaseSEM):
             flow_ = spline_autoregressive if self.use_autoregressive else spline_coupling
         else:
             flow_ = affine_autoregressive if self.use_autoregressive else affine_coupling
+        if self.use_autoregressive:
             flow_kwargs['stable'] = self.use_stable
 
         if self.use_prior_permutations:
