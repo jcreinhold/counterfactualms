@@ -23,6 +23,7 @@ class _OneCycleLR(_LRScheduler):
                  max_momentum=0.95,
                  div_factor=25.,
                  final_div_factor=1e4,
+                 three_phase=False,
                  last_epoch=-1,
                  verbose=False):
 
@@ -45,8 +46,48 @@ class _OneCycleLR(_LRScheduler):
             if steps_per_epoch <= 0 or not isinstance(steps_per_epoch, int):
                 raise ValueError("Expected positive integer steps_per_epoch, but got {}".format(steps_per_epoch))
             self.total_steps = epochs * steps_per_epoch
-        self.step_size_up = float(pct_start * self.total_steps) - 1
-        self.step_size_down = float(self.total_steps - self.step_size_up) - 1
+
+        if three_phase:
+            self._schedule_phases = [
+                {
+                    'end_step': float(pct_start * self.total_steps) - 1,
+                    'start_lr': 'initial_lr',
+                    'end_lr': 'max_lr',
+                    'start_momentum': 'max_momentum',
+                    'end_momentum': 'base_momentum',
+                },
+                {
+                    'end_step': float(2 * pct_start * self.total_steps) - 2,
+                    'start_lr': 'max_lr',
+                    'end_lr': 'initial_lr',
+                    'start_momentum': 'base_momentum',
+                    'end_momentum': 'max_momentum',
+                },
+                {
+                    'end_step': self.total_steps - 1,
+                    'start_lr': 'initial_lr',
+                    'end_lr': 'min_lr',
+                    'start_momentum': 'max_momentum',
+                    'end_momentum': 'max_momentum',
+                },
+            ]
+        else:
+            self._schedule_phases = [
+                {
+                    'end_step': float(pct_start * self.total_steps) - 1,
+                    'start_lr': 'initial_lr',
+                    'end_lr': 'max_lr',
+                    'start_momentum': 'max_momentum',
+                    'end_momentum': 'base_momentum',
+                },
+                {
+                    'end_step': self.total_steps - 1,
+                    'start_lr': 'max_lr',
+                    'end_lr': 'min_lr',
+                    'start_momentum': 'base_momentum',
+                    'end_momentum': 'max_momentum',
+                },
+            ]
 
         # Validate pct_start
         if pct_start < 0 or pct_start > 1 or not isinstance(pct_start, float):
@@ -120,17 +161,16 @@ class _OneCycleLR(_LRScheduler):
                              .format(step_num + 1, self.total_steps))
 
         for group in self.optimizer.param_groups:
-            if step_num <= self.step_size_up:
-                computed_lr = self.anneal_func(group['initial_lr'], group['max_lr'], step_num / self.step_size_up)
-                if self.cycle_momentum:
-                    computed_momentum = self.anneal_func(group['max_momentum'], group['base_momentum'],
-                                                         step_num / self.step_size_up)
-            else:
-                down_step_num = step_num - self.step_size_up
-                computed_lr = self.anneal_func(group['max_lr'], group['min_lr'], down_step_num / self.step_size_down)
-                if self.cycle_momentum:
-                    computed_momentum = self.anneal_func(group['base_momentum'], group['max_momentum'],
-                                                         down_step_num / self.step_size_down)
+            start_step = 0
+            for i, phase in enumerate(self._schedule_phases):
+                end_step = phase['end_step']
+                if step_num <= end_step or i == len(self._schedule_phases) - 1:
+                    pct = (step_num - start_step) / (end_step - start_step)
+                    computed_lr = self.anneal_func(group[phase['start_lr']], group[phase['end_lr']], pct)
+                    if self.cycle_momentum:
+                        computed_momentum = self.anneal_func(group[phase['start_momentum']], group[phase['end_momentum']], pct)
+                    break
+                start_step = phase['end_step']
 
             lrs.append(computed_lr)
             if self.cycle_momentum:
