@@ -29,13 +29,13 @@ class ConditionalVISEM(BaseVISEM):
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
         ]
 
-        ventricle_volume_net = DenseNN(3, [8, 16], param_dims=[1, 1], nonlinearity=nonlinearity)
+        ventricle_volume_net = DenseNN(3, [12, 20], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.ventricle_volume_flow_components = ConditionalAffineTransform(context_nn=ventricle_volume_net, event_dim=0)
         self.ventricle_volume_flow_transforms = [
             self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
         ]
 
-        lesion_volume_net = DenseNN(4, [16, 32], param_dims=[1, 1], nonlinearity=nonlinearity)
+        lesion_volume_net = DenseNN(4, [16, 24], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.lesion_volume_flow_components = ConditionalAffineTransform(context_nn=lesion_volume_net, event_dim=0)
         self.lesion_volume_flow_transforms = [
             self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
@@ -47,7 +47,7 @@ class ConditionalVISEM(BaseVISEM):
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        score_net = DenseNN(4, [16, 32], param_dims=[1, 1], nonlinearity=nonlinearity)
+        score_net = DenseNN(3, [12, 20], param_dims=[1, 1], nonlinearity=nonlinearity)
         self.score_flow_components = ConditionalAffineTransform(context_nn=score_net, event_dim=0)
         self.score_flow_transforms = [
             self.score_flow_components, self.score_flow_constraint_transforms
@@ -66,13 +66,6 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.age_flow_components
         age_ = self.age_flow_constraint_transforms.inv(age)
 
-        brain_context = torch.cat([sex, age_], 1)
-        brain_volume_base_dist = Normal(self.brain_volume_base_loc, self.brain_volume_base_scale).to_event(1)
-        brain_volume_dist = ConditionalTransformedDistribution(brain_volume_base_dist, self.brain_volume_flow_transforms).condition(brain_context)
-        brain_volume = pyro.sample('brain_volume', brain_volume_dist)
-        _ = self.brain_volume_flow_components
-        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
-
         duration_context = torch.cat([sex, age_], 1)
         duration_base_dist = Normal(self.duration_base_loc, self.duration_base_scale).to_event(1)
         duration_dist = ConditionalTransformedDistribution(duration_base_dist, self.duration_flow_transforms).condition(duration_context)  # noqa: E501
@@ -80,19 +73,26 @@ class ConditionalVISEM(BaseVISEM):
         _ = self.duration_flow_components
         duration_ = self.duration_flow_constraint_transforms.inv(duration)
 
+        score_context = torch.cat([duration_, sex, age_], 1)
+        score_base_dist = Normal(self.score_base_loc, self.score_base_scale).to_event(1)
+        score_dist = ConditionalTransformedDistribution(score_base_dist, self.score_flow_transforms).condition(score_context)  # noqa: E501
+        score = pyro.sample('score', score_dist)
+        _ = self.score_flow_components
+        score_ = self.score_flow_constraint_transforms.inv(score)
+
+        brain_context = torch.cat([sex, age_], 1)
+        brain_volume_base_dist = Normal(self.brain_volume_base_loc, self.brain_volume_base_scale).to_event(1)
+        brain_volume_dist = ConditionalTransformedDistribution(brain_volume_base_dist, self.brain_volume_flow_transforms).condition(brain_context)
+        brain_volume = pyro.sample('brain_volume', brain_volume_dist)
+        _ = self.brain_volume_flow_components
+        brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
+
         ventricle_context = torch.cat([age_, brain_volume_, duration_], 1)
         ventricle_volume_base_dist = Normal(self.ventricle_volume_base_loc, self.ventricle_volume_base_scale).to_event(1)
         ventricle_volume_dist = ConditionalTransformedDistribution(ventricle_volume_base_dist, self.ventricle_volume_flow_transforms).condition(ventricle_context)  # noqa: E501
         ventricle_volume = pyro.sample('ventricle_volume', ventricle_volume_dist)
         _ = self.ventricle_volume_flow_components
         ventricle_volume_ = self.ventricle_volume_flow_constraint_transforms.inv(ventricle_volume)
-
-        score_context = torch.cat([duration_, sex, age_, ventricle_volume_], 1)
-        score_base_dist = Normal(self.score_base_loc, self.score_base_scale).to_event(1)
-        score_dist = ConditionalTransformedDistribution(score_base_dist, self.score_flow_transforms).condition(score_context)  # noqa: E501
-        score = pyro.sample('score', score_dist)
-        _ = self.score_flow_components
-        score_ = self.score_flow_constraint_transforms.inv(score)
 
         lesion_context = torch.cat([brain_volume_, ventricle_volume_, duration_, score_], 1)
         lesion_volume_base_dist = Normal(self.lesion_volume_base_loc, self.lesion_volume_base_scale).to_event(1)
