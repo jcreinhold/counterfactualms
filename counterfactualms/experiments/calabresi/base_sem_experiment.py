@@ -511,6 +511,7 @@ class SVIExperiment(BaseCovariateExperiment):
             loss = self.svi_loss
 
         optimizer = AdagradRMSProp if self.hparams.use_adagrad_rmsprop else AdamW
+        verbose = self.hparams.verbosity > 1  # only print lr in debug mode
         if self.hparams.use_exponential_lr:
             scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
                                        'gamma': self.hparams.lrd}, clip_args=per_param_clip_args)
@@ -518,7 +519,8 @@ class SVIExperiment(BaseCovariateExperiment):
             scheduler = OneCycleLR({'optimizer': optimizer, 'optim_args': per_param_callable,
                                     'epochs': self.hparams.n_epochs, 'steps_per_epoch': self._steps_per_epoch(),
                                     'pct_start': self.hparams.pct_start, 'div_factor': self.hparams.div_factor,
-                                    'final_div_factor': self.hparams.final_div_factor}, clip_args=per_param_clip_args)
+                                    'final_div_factor': self.hparams.final_div_factor, 'verbose': verbose},
+                                   clip_args=per_param_clip_args)
         if self.hparams.use_cf_guide:
             def guide(*args, **kwargs):
                 return self.pyro_model.counterfactual_guide(*args, **kwargs, counterfactual_type=self.hparams.cf_elbo_type)

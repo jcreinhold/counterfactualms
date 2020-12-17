@@ -78,6 +78,7 @@ def main():
         setattr(hparams, k, v)
 
     setattr(hparams, 'n_epochs', args.max_epochs)
+    setattr(hparams, 'verbosity', exp_args.verbosity)
 
     callbacks = [ModelCheckpoint(
         monitor='score',
