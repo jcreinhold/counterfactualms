@@ -183,6 +183,4 @@ class _OneCycleLR(_LRScheduler):
         return lrs
 
 
-class OneCycleLR(PyroLRScheduler):
-    def __init__(self, optim_args, clip_args=None):
-        super().__init__(_OneCycleLR, optim_args, clip_args=clip_args)
+OneCycleLR = lambda optim_args, clip_args=None: PyroLRScheduler(_OneCycleLR, optim_args, clip_args)
