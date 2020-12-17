@@ -514,7 +514,8 @@ class SVIExperiment(BaseCovariateExperiment):
         verbose = self.hparams.verbosity > 1  # only print lr in debug mode
         if self.hparams.use_exponential_lr:
             scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
-                                       'gamma': self.hparams.lrd}, clip_args=per_param_clip_args)
+                                       'gamma': self.hparams.lrd, 'verbose': verbose},
+                                      clip_args=per_param_clip_args)
         else:
             scheduler = OneCycleLR({'optimizer': optimizer, 'optim_args': per_param_callable,
                                     'epochs': self.hparams.n_epochs, 'steps_per_epoch': self._steps_per_epoch(),
