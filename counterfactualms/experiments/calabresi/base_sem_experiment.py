@@ -513,21 +513,21 @@ class SVIExperiment(BaseCovariateExperiment):
         optimizer = AdagradRMSProp if self.hparams.use_adagrad_rmsprop else AdamW
         verbose = self.hparams.verbosity > 1  # only print lr in debug mode
         if self.hparams.use_exponential_lr:
-            scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
-                                       'gamma': self.hparams.lrd, 'verbose': verbose},
-                                      clip_args=per_param_clip_args)
+            self.scheduler = ExponentialLR({'optimizer': optimizer, 'optim_args': per_param_callable,
+                                            'gamma': self.hparams.lrd, 'verbose': verbose},
+                                            clip_args=per_param_clip_args)
         else:
-            scheduler = OneCycleLR({'optimizer': optimizer, 'optim_args': per_param_callable,
-                                    'epochs': self.hparams.n_epochs, 'steps_per_epoch': self._steps_per_epoch(),
-                                    'pct_start': self.hparams.pct_start, 'div_factor': self.hparams.div_factor,
-                                    'final_div_factor': self.hparams.final_div_factor, 'verbose': verbose},
-                                   clip_args=per_param_clip_args)
+            self.scheduler = OneCycleLR({'optimizer': optimizer, 'optim_args': per_param_callable,
+                                         'epochs': self.hparams.n_epochs, 'steps_per_epoch': self._steps_per_epoch(),
+                                         'pct_start': self.hparams.pct_start, 'div_factor': self.hparams.div_factor,
+                                         'final_div_factor': self.hparams.final_div_factor, 'verbose': verbose},
+                                         clip_args=per_param_clip_args)
         if self.hparams.use_cf_guide:
             def guide(*args, **kwargs):
                 return self.pyro_model.counterfactual_guide(*args, **kwargs, counterfactual_type=self.hparams.cf_elbo_type)
-            self.svi = SVI(self.pyro_model.svi_model, guide, scheduler, loss)
+            self.svi = SVI(self.pyro_model.svi_model, guide, self.scheduler, loss)
         else:
-            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, scheduler, loss)
+            self.svi = SVI(self.pyro_model.svi_model, self.pyro_model.svi_guide, self.scheduler, loss)
         self.svi.loss_class = loss
 
     def backward(self, *args, **kwargs):
@@ -625,6 +625,7 @@ class SVIExperiment(BaseCovariateExperiment):
             logging.info('Validation:')
             self.print_trace_updates(batch)
         loss = self.svi.step(batch)
+        self.scheduler.step()
         loss = torch.as_tensor(loss)
         self.log('train_loss', loss, on_step=False, on_epoch=True)
         af = self.pyro_model.annealing_factor
