@@ -163,9 +163,9 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.pyro_model.duration_flow_lognorm_loc = duration.log().mean().to(self.torch_device).float()
         self.pyro_model.duration_flow_lognorm_scale = duration.log().std().to(self.torch_device).float()
 
-        score = torch.from_numpy(self.calabresi_train.csv['score'].to_numpy())
-        self.pyro_model.score_flow_lognorm_loc = score.log().mean().to(self.torch_device).float()
-        self.pyro_model.score_flow_lognorm_scale = score.log().std().to(self.torch_device).float()
+        edss = torch.from_numpy(self.calabresi_train.csv['edss'].to_numpy())
+        self.pyro_model.edss_flow_lognorm_loc = edss.log().mean().to(self.torch_device).float()
+        self.pyro_model.edss_flow_lognorm_scale = edss.log().std().to(self.torch_device).float()
 
         ventricle_volume = torch.from_numpy(self.calabresi_train.csv['ventricle_volume'].to_numpy())
         self.pyro_model.ventricle_volume_flow_lognorm_loc = ventricle_volume.log().mean().to(self.torch_device).float()
@@ -178,6 +178,10 @@ class BaseCovariateExperiment(pl.LightningModule):
         lesion_volume = torch.from_numpy(self.calabresi_train.csv['lesion_volume'].to_numpy())
         self.pyro_model.lesion_volume_flow_lognorm_loc = lesion_volume.log().mean().to(self.torch_device).float()
         self.pyro_model.lesion_volume_flow_lognorm_scale = lesion_volume.log().std().to(self.torch_device).float()
+
+        slice_number = torch.from_numpy(self.calabresi_train.csv['slice_number'].to_numpy())
+        self.pyro_model.slice_number_min = torch.tensor([slice_number.min()-0.5-1e-3], device=self.torch_device, dtype=torch.float32)
+        self.pyro_model.slice_number_max = torch.tensor([slice_number.max()+0.5+1e-3], device=self.torch_device, dtype=torch.float32)
 
         perm = lambda: torch.randperm(self.pyro_model.latent_dim, dtype=torch.long, requires_grad=False).to(self.torch_device)
         if self.pyro_model.use_prior_permutations:
@@ -193,7 +197,8 @@ class BaseCovariateExperiment(pl.LightningModule):
             logger.info(f'set ventricle_volume_flow_lognorm {self.pyro_model.ventricle_volume_flow_lognorm.loc} +/- {self.pyro_model.ventricle_volume_flow_lognorm.scale}')  # noqa: E501
             logger.info(f'set lesion_volume_flow_lognorm {self.pyro_model.lesion_volume_flow_lognorm.loc} +/- {self.pyro_model.lesion_volume_flow_lognorm.scale}')  # noqa: E501
             logger.info(f'set duration_flow_lognorm {self.pyro_model.duration_flow_lognorm.loc} +/- {self.pyro_model.duration_flow_lognorm.scale}')  # noqa: E501
-            logger.info(f'set score_flow_lognorm {self.pyro_model.score_flow_lognorm.loc} +/- {self.pyro_model.score_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set edss_flow_lognorm {self.pyro_model.edss_flow_lognorm.loc} +/- {self.pyro_model.edss_flow_lognorm.scale}')  # noqa: E501
+            logger.info(f'set slice min/max {int(self.pyro_model.slice_number_min.item()):d} / {int(self.pyro_model.slice_number_max.item()):d}')  # noqa: E501
 
     def configure_optimizers(self):
         pass
@@ -299,10 +304,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             'do(age=60)': {'age': torch.ones_like(batch['age']) * 60},
             'do(sex=0)': {'sex': torch.zeros_like(batch['sex'])},
             'do(sex=1)': {'sex': torch.ones_like(batch['sex'])},
-            'do(duration=0)': {'duration': torch.zeros_like(batch['type']) + 1e-5},
-            'do(duration=12)': {'duration': torch.ones_like(batch['type']) * 12.},
-            'do(score=0)': {'type': torch.ones_like(batch['type']) + 1e-5},
-            'do(score=6)': {'type': torch.ones_like(batch['type']) * 6.},
+            'do(duration=0)': {'duration': torch.zeros_like(batch['duration']) + 1e-5},
+            'do(duration=12)': {'duration': torch.ones_like(batch['duration']) * 12.},
+            'do(edss=0)': {'edss': torch.ones_like(batch['edss']) + 1e-5},
+            'do(edss=6)': {'edss': torch.ones_like(batch['edss']) * 6.},
             'do(brain_volume=8000, ventricle_volume=500)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 8000.,
                                                             'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 500.},
             'do(brain_volume=16000, ventricle_volume=1000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 16000.,
@@ -376,7 +381,7 @@ class BaseCovariateExperiment(pl.LightningModule):
     @property
     def required_data(self):
         return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
-                'score', 'duration'}
+                'edss', 'duration', 'slice_number'}
 
     def _check_observation(self, obs):
         keys = obs.keys()
@@ -479,10 +484,10 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.build_counterfactual('do(lesion_volume=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
-                '1': {'score': torch.zeros_like(obs_batch['score']) + 1.},
-                '5': {'score': torch.zeros_like(obs_batch['score']) + 5.}
+                '1': {'edss': torch.zeros_like(obs_batch['edss']) + 1.},
+                '5': {'edss': torch.zeros_like(obs_batch['edss']) + 5.}
             }
-            self.build_counterfactual('do(score=x)', obs=obs_batch, conditions=conditions)
+            self.build_counterfactual('do(edss=x)', obs=obs_batch, conditions=conditions)
 
             conditions = {
                 '0': {'duration': torch.zeros_like(obs_batch['duration']) + 1e-5},

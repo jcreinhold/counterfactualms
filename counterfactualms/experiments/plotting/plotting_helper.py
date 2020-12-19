@@ -41,7 +41,7 @@ variables = (
     'ventricle_volume',
     'lesion_volume',
     'duration',
-    'score',
+    'edss',
 )
 var_name = {
     'ventricle_volume': 'v',
@@ -49,11 +49,11 @@ var_name = {
     'lesion_volume': 'l',
     'sex': 's',
     'age': 'a',
-    'score': 'e',
+    'edss': 'e',
     'duration': 'd',
 }
 value_fmt = {
-    'score': lambda s: rf'{np.round(s,2):.2g}',
+    'edss': lambda s: rf'{np.round(s,2):.2g}',
     'duration': lambda s: rf'{np.round(s,2):.2g}\,\mathrm{{y}}',
     'ventricle_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
     'brain_volume': lambda s: rf'{int(np.round(s/1000)):d}\,\mathrm{{ml}}',
@@ -63,7 +63,7 @@ value_fmt = {
     'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
 }
 save_fmt = {
-    'score': lambda s: f'{np.round(s,2):.2g}',
+    'edss': lambda s: f'{np.round(s,2):.2g}',
     'duration': lambda s: f'{np.round(s,2):.2g}',
     'ventricle_volume': lambda s: f'{np.round(s/1000,2):.2g}',
     'brain_volume': lambda s: f'{int(np.round(s/1000)):d}',
@@ -156,19 +156,19 @@ def fmt_save(intervention):
 
 
 def prep_data(batch):
-    x = 255. * batch['image'].unsqueeze(0)
+    x = 255. * batch['image'].float().unsqueeze(0)
     age = batch['age'].unsqueeze(0).unsqueeze(0).float()
     sex = batch['sex'].unsqueeze(0).unsqueeze(0).float()
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
     brain_volume = batch['brain_volume'].unsqueeze(0).unsqueeze(0).float()
     lesion_volume = batch['lesion_volume'].unsqueeze(0).unsqueeze(0).float()
-    score = batch['score'].unsqueeze(0).unsqueeze(0).float()
+    edss = batch['edss'].unsqueeze(0).unsqueeze(0).float()
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     type = batch['type'].unsqueeze(0).unsqueeze(0).float()
-    x = x.float()
+    slice_number = batch['slice_number'].unsqueeze(0).unsqueeze(0).float()
     return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
             'brain_volume': brain_volume, 'lesion_volume': lesion_volume,
-            'score': score, 'duration': duration, 'type': type}
+            'edss': edss, 'duration': duration, 'type': type, 'slice_number': slice_number}
 
 
 def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32):
@@ -208,7 +208,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
             axi.yaxis.set_major_locator(plt.NullLocator())
 
     orig_data['type'] = ms_type
-    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$; $d={duration}$; $e={score}$').format(
+    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$; $d={duration}$; $e={edss}$').format(
         **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
     fig.suptitle(suptitle, fontsize=13)
@@ -259,7 +259,7 @@ def interactive_plot(model_name):
 
         orig_data['type'] = ms_type
         att_str = ('$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$l={lesion_volume}$\n'
-                   '$d={duration}$\n$e={score}$\n$t={type}$').format(
+                   '$d={duration}$\n$e={edss}$\n$t={type}$').format(
             **{att: value_fmt[att](orig_data[att].item()) for att in variables + ('type',)}
         )
 
@@ -283,9 +283,9 @@ def interactive_plot(model_name):
     from IPython.display import display
 
     def plot(image, age, sex, brain_volume, ventricle_volume, lesion_volume,
-             duration, score,
+             duration, edss,
              do_age, do_sex, do_brain_volume, do_ventricle_volume, do_lesion_volume,
-             do_duration, do_score,
+             do_duration, do_edss,
              save_image_dir, save):
         intervention = {}
         if do_age:
@@ -300,8 +300,8 @@ def interactive_plot(model_name):
             intervention['lesion_volume'] = lesion_volume * 1000.
         if do_duration:
             intervention['duration'] = duration
-        if do_score:
-            intervention['score'] = score
+        if do_edss:
+            intervention['edss'] = edss
 
         plot_intervention(intervention, image, save_image_dir=save_image_dir, save=save)
 
@@ -318,8 +318,8 @@ def interactive_plot(model_name):
         do_lesion_volume=Checkbox(description='do(lesion_volume)'),
         duration=FloatSlider(min=1e-5, max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
         do_duration=Checkbox(description='do(duration)'),
-        score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
-        do_score=Checkbox(description='do(score)'),
+        edss=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='EDSS:', style={'description_width': 'initial'}),
+        do_edss=Checkbox(description='do(edss)'),
         save_image_dir=Text(value='', placeholder='Full path', description='Save Image Directory:', style={'description_width': 'initial'}),
         save=Checkbox(description='Save')
         )

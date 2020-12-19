@@ -220,6 +220,8 @@ class BaseVISEM(BaseSEM):
 
         # priors
         self.sex_logits = torch.nn.Parameter(torch.zeros([1, ]))
+        self.register_buffer('slice_number_min', torch.zeros([1, ], requires_grad=False))
+        self.register_buffer('slice_number_max', 241.*torch.ones([1, ]+1., requires_grad=False))
 
         for k in self.required_data - {'sex', 'x'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
@@ -267,9 +269,9 @@ class BaseVISEM(BaseSEM):
         self.duration_flow_eps = AffineTransform(loc=-eps, scale=1.)
         self.duration_flow_constraint_transforms = ComposeTransform([self.duration_flow_lognorm, ExpTransform(), self.duration_flow_eps])
 
-        self.score_flow_lognorm = AffineTransform(loc=self.score_flow_lognorm_loc.item(), scale=self.score_flow_lognorm_scale.item())
-        self.score_flow_eps = AffineTransform(loc=-eps, scale=1.)
-        self.score_flow_constraint_transforms = ComposeTransform([self.score_flow_lognorm, ExpTransform(), self.score_flow_eps])
+        self.edss_flow_lognorm = AffineTransform(loc=self.edss_flow_lognorm_loc.item(), scale=self.edss_flow_lognorm_scale.item())
+        self.edss_flow_eps = AffineTransform(loc=-eps, scale=1.)
+        self.edss_flow_constraint_transforms = ComposeTransform([self.edss_flow_lognorm, ExpTransform(), self.edss_flow_eps])
 
         hidden_dims = (3 * self.latent_dim + 1,) if self.use_autoregressive else (2*self.latent_dim, 2*self.latent_dim)
         flow_kwargs = dict(hidden_dims=hidden_dims, nonlinearity=nonlinearity)
@@ -374,7 +376,7 @@ class BaseVISEM(BaseSEM):
     @property
     def required_data(self):
         return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
-                'score', 'duration'}
+                'edss', 'duration', 'slice_number'}
 
     def _check_observation(self, obs):
         keys = obs.keys()
@@ -430,9 +432,11 @@ class BaseVISEM(BaseSEM):
             # and we don't have the exogenous noise for them yet
             if 'sex' not in condition.keys():
                 exogenous['sex'] = obs_['sex']
+            if 'slice_number' not in condition.keys():
+                exogenous['slice_number'] = obs_['slice_number']
 
             cf = pyro.poutine.do(pyro.poutine.condition(self.sample_scm, data=exogenous), data=condition)(n)
-            counterfactuals += [cf]
+            counterfactuals.append(cf)
 
         return self._cf_dict(counterfactuals)
 
@@ -593,11 +597,15 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def prep_batch(self, batch):
         x = 255. * batch['image'].float()  # multiply by 255 b/c preprocess tfms
-        x += (torch.rand_like(x) - 0.5) # add noise per Theis 2016
+        if self.training:
+            x += (torch.rand_like(x) - 0.5) # add noise per Theis 2016
         out = dict(x=x)
         for k in self.required_data:
             if k in batch:
                 out[k] = batch[k].unsqueeze(1).float()
+        if self.training:
+            out['slice_number'] += (torch.rand_like(out['slice_number']) - 0.5)
+            out['edss'] += ((torch.rand_like(out['edss']) / 2.) - 0.25)
         return out
 
     def _steps_per_epoch(self):

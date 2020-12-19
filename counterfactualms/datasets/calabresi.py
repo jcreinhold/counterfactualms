@@ -16,7 +16,7 @@ class CalabresiDataset(Dataset):
         csv['treatment_propagated'] = csv['treatment_propagated'].map({
             np.nan: -1., 'N': 0., 'Y': 1.})
         csv['treatment'] = csv['treatment'].map({
-            np.nan: -1., 'none': 0., 'glatiramer acetate': 1.,
+            np.nan: 0., 'none': 0., 'glatiramer acetate': 1.,
             'interferon beta': 2., 'natalizumab': 3., 'other': 4.})
         csv['duration'] = csv['duration'].fillna(0.) + eps
         csv['edss'] = csv['edss'].fillna(0.) + eps
@@ -88,5 +88,10 @@ class CalabresiDataset(Dataset):
         item['ventricle_volume'] = torch.as_tensor(item['ventricle_volume'], dtype=torch.float32)
         item['lesion_volume'] = torch.as_tensor(item['lesion_volume'], dtype=torch.float32)
         item['score'] = torch.as_tensor(item['score'], dtype=torch.float32)
+        item['edss'] = torch.as_tensor(item['edss'], dtype=torch.float32)
+        item['fss'] = torch.as_tensor(item['fss'], dtype=torch.float32)
+        item['msss'] = torch.as_tensor(item['msss'], dtype=torch.float32)
+        item['treatment'] = torch.as_tensor(item['treatment'], dtype=torch.float32)
+        item['treatment_propagated'] = torch.as_tensor(item['treatment_propagated'], dtype=torch.float32)
         item['slice_number'] = torch.as_tensor(item['slice_number'], dtype=torch.float32)
         return item
