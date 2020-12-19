@@ -595,17 +595,24 @@ class SVIExperiment(BaseCovariateExperiment):
         metrics['log p(z) - log q(z)'] = metrics['log p(z)'] - metrics['log q(z)']
         return metrics
 
+    def _theis_noise(self, obs):
+        """ add noise to discrete variables per Theis 2016 """
+        if self.training:
+            obs['x'] += (torch.rand_like(obs['x']) - 0.5)
+            obs['slice_number'] += (torch.rand_like(obs['slice_number']) - 0.5)
+            obs['duration'] += torch.rand_like(obs['duration'] - 0.5)
+            obs['duration'].clamp(min=1e-4)
+            obs['edss'] += ((torch.rand_like(obs['edss']) / 2.) - 0.25)
+            obs['edss'].clamp(min=1e-4)
+        return obs
+
     def prep_batch(self, batch):
         x = 255. * batch['image'].float()  # multiply by 255 b/c preprocess tfms
-        if self.training:
-            x += (torch.rand_like(x) - 0.5) # add noise per Theis 2016
         out = dict(x=x)
         for k in self.required_data:
             if k in batch:
                 out[k] = batch[k].unsqueeze(1).float()
-        if self.training:
-            out['slice_number'] += (torch.rand_like(out['slice_number']) - 0.5)
-            out['edss'] += ((torch.rand_like(out['edss']) / 2.) - 0.25)
+        out = self._theis_noise(out)
         return out
 
     def _steps_per_epoch(self):
