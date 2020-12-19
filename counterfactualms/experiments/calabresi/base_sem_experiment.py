@@ -223,14 +223,14 @@ class BaseVISEM(BaseSEM):
         self.register_buffer('slice_number_min', torch.zeros([1, ], requires_grad=False))
         self.register_buffer('slice_number_max', 241.*torch.ones([1, ], requires_grad=False)+1.)
 
-        for k in self.required_data - {'sex', 'x'}:
+        for k in self.required_data - {'sex', 'x', 'slice_number'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
             self.register_buffer(f'{k}_base_scale', torch.ones([1, ], requires_grad=False))
 
         self.register_buffer('x_base_loc', torch.zeros(self.img_shape, requires_grad=False))
         self.register_buffer('x_base_scale', torch.ones(self.img_shape, requires_grad=False))
 
-        for k in self.required_data - {'sex', 'x'}:
+        for k in self.required_data - {'sex', 'x', 'slice_number'}:
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
