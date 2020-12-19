@@ -43,7 +43,7 @@ class ConditionalFlowVISEM(BaseVISEM):
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        self.edss_flow_components = conditional_spline(1, 1, [8, 16], nonlinearity=nonlinearity)
+        self.edss_flow_components = conditional_spline(1, 2, [8, 16], nonlinearity=nonlinearity)
         self.edss_flow_transforms = [
             self.edss_flow_components, self.edss_flow_constraint_transforms
         ]
