@@ -601,9 +601,9 @@ class SVIExperiment(BaseCovariateExperiment):
             obs['x'] += (torch.rand_like(obs['x']) - 0.5)
             obs['slice_number'] += (torch.rand_like(obs['slice_number']) - 0.5)
             obs['duration'] += torch.rand_like(obs['duration'] - 0.5)
-            obs['duration'].clamp(min=1e-4)
+            obs['duration'].clamp_(min=1e-4)
             obs['edss'] += ((torch.rand_like(obs['edss']) / 2.) - 0.25)
-            obs['edss'].clamp(min=1e-4)
+            obs['edss'].clamp_(min=1e-4)
         return obs
 
     def prep_batch(self, batch):
