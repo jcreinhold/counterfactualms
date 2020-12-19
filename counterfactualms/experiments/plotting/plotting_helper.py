@@ -74,7 +74,7 @@ save_fmt = {
 }
 
 imshow_kwargs = dict(vmin=0., vmax=255.)
-_buffers_to_load = ('norm', 'permutation')
+_buffers_to_load = ('norm', 'permutation', 'slice_number')
 
 
 def get_best_model(model_paths):
