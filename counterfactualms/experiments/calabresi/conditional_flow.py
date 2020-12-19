@@ -55,7 +55,7 @@ class ConditionalFlowVISEM(BaseVISEM):
         _ = self.sex_logits
         sex = pyro.sample('sex', sex_dist, infer=dict(baseline={'use_decaying_avg_baseline': True}))
 
-        slice_number_dist = Uniform(self.slice_number_min, self.slice_number_max)
+        slice_number_dist = Uniform(self.slice_number_min, self.slice_number_max).to_event(1)
         slice_number = pyro.sample('slice_number', slice_number_dist)
 
         age_base_dist = Normal(self.age_base_loc, self.age_base_scale).to_event(1)
