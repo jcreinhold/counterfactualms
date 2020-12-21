@@ -1,3 +1,4 @@
+import numpy as np
 import pyro
 from pyro.nn import pyro_method
 from pyro.distributions import (
@@ -25,7 +26,7 @@ class BaseHierarchicalVISEM(BaseVISEM):
         self.encoder = HierarchicalEncoder(num_convolutions=self.num_convolutions, filters=self.enc_filters,
                                            input_size=self.img_shape, use_weight_norm=self.use_weight_norm,
                                            use_spectral_norm=self.use_spectral_norm)
-        decoder = HierarchicalDecoder(num_convolutions=self.num_convolutions, filters=self.enc_filters,
+        decoder = HierarchicalDecoder(num_convolutions=self.num_convolutions, filters=self.dec_filters,
                                       output_size=self.img_shape, use_weight_norm=self.use_weight_norm,
                                       use_spectral_norm=self.use_spectral_norm, context_dim=self.context_dim)
         self._create_decoder(decoder)
@@ -33,6 +34,7 @@ class BaseHierarchicalVISEM(BaseVISEM):
         self.latent_encoder = nn.ModuleList([])
         del self.z_loc, self.z_scale
         self.intermediate_shapes = self.encoder.intermediate_shapes
+        assert all([np.all(eis == dis) for eis, dis in zip(self.intermediate_shapes, decoder.intermediate_shapes[::-1])])
         self.n_levels = len(self.intermediate_shapes)
         for i, z_size in enumerate(self.intermediate_shapes):
             n_latent_channels = z_size[0]
@@ -40,17 +42,29 @@ class BaseHierarchicalVISEM(BaseVISEM):
             nonlinearity = Swish() if self.use_swish else torch.nn.LeakyReLU(0.1, inplace=True)
             self.context_attn.append(nn.Sequential(
                 nn.Linear(self.context_dim, hidden_dim),
-                nonlinearity(),
+                nonlinearity,
                 nn.Linear(hidden_dim, n_latent_channels),
                 nn.Sigmoid()
             ))
-            backbone = nn.Sequential(Conv2d(n_latent_channels, n_latent_channels, 3,
+            backbone = nn.Sequential(Conv2d(n_latent_channels, n_latent_channels, 3, padding=1,
                                             use_weight_norm=self.use_weight_norm,
                                             use_spectral_norm=self.use_spectral_norm),
-                                     nonlinearity())
-            self.latent_encoder.append(Conv2dIndepNormal(backbone, n_latent_channels))
-            self.register_buffer(f'z_loc_{i}', torch.zeros(z_size, requires_grad=False))
-            self.register_buffer(f'z_scale_{i}', torch.ones(z_size, requires_grad=False))
+                                     nonlinearity)
+            self.latent_encoder.append(Conv2dIndepNormal(backbone, n_latent_channels, n_latent_channels))
+            self.register_buffer(f'z_loc_{i}', torch.zeros(z_size.tolist(), requires_grad=False))
+            self.register_buffer(f'z_scale_{i}', torch.ones(z_size.tolist(), requires_grad=False))
+
+    @pyro_method
+    def infer(self, obs):
+        self._check_observation(obs)
+        obs_ = obs.copy()
+        z = self.infer_z(obs_)
+        for i in range(self.n_levels):
+            obs_.update({f'z{i}': z[i]})
+        exogenous = self.infer_exogenous(obs_)
+        for i in range(self.n_levels):
+            exogenous[f'z{i}'] = z[i]
+        return exogenous
 
     @pyro_method
     def reconstruct(self, obs, num_particles:int=1):
@@ -102,17 +116,6 @@ class BaseHierarchicalVISEM(BaseVISEM):
             counterfactuals.append(cf)
 
         return self._cf_dict(counterfactuals)
-
-    def get_trace_metrics(self, batch):
-        metrics = {}
-        model = self.svi.loss_class.trace_storage['model']
-        guide = self.svi.loss_class.trace_storage['guide']
-        for k in self.required_data:
-            metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
-        for i in range(self.n_levels):
-            metrics[f'log p(z{i})'] = model.nodes[f'z{i}']['log_prob'].mean()
-            metrics[f'log q(z{i})'] = guide.nodes[f'z{i}']['log_prob'].mean()
-        return metrics
 
 
 class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
@@ -216,7 +219,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
         z = []
         for i in range(self.n_levels):
             z_loc = getattr(self, f'z_loc_{i}')
-            z_scale = getattr(self, f'z_loc_{i}')
+            z_scale = getattr(self, f'z_scale_{i}')
             z_dist = Normal(z_loc, z_scale).to_event(3)
             with poutine.scale(scale=self.annealing_factor):
                 z.append(pyro.sample(f'z{i}', z_dist))
@@ -241,9 +244,9 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
 
             z = []
             for i, (latent_enc, ctx_attn) in enumerate(zip(self.latent_encoder,self.context_attn)):
-                ctx_ = ctx_attn(ctx)
-                hidden = hidden * ctx_
-                z_dist = latent_enc.predict(hidden)
+                ctx_ = ctx_attn(ctx).view(batch_size, -1, 1, 1)
+                hidden_i = hidden[i] * ctx_
+                z_dist = latent_enc.predict(hidden_i)
                 with poutine.scale(scale=self.annealing_factor):
                     z.append(pyro.sample(f'z{i}', z_dist))
 

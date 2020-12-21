@@ -105,6 +105,7 @@ class BaseVISEM(BaseSEM):
         self.use_swish = use_swish
         self.use_stable = use_stable
         self.annealing_factor = 1.  # initialize here; will be changed during training
+        self.n_levels = 0
 
         # decoder parts
         if use_nvae:
@@ -336,10 +337,7 @@ class BaseVISEM(BaseSEM):
         return super()._get_preprocess_transforms().inv
 
     def _get_transformed_x_dist(self, latent, ctx=None):
-        if ctx is not None:
-            x_pred_dist = self.decoder.predict(latent, ctx)  # returns a normal dist with mean of the predicted image
-        else:
-            x_pred_dist = self.decoder.predict(latent)  # returns a normal dist with mean of the predicted image
+        x_pred_dist = self.decoder.predict(latent, ctx)  # returns a normal dist with mean of the predicted image
         if self.laplace_likelihood:
             x_base_dist = Laplace(self.x_base_loc, self.x_base_scale).to_event(3)
         else:
@@ -596,9 +594,14 @@ class SVIExperiment(BaseCovariateExperiment):
         guide = self.svi.loss_class.trace_storage['guide']
         for k in self.required_data:
             metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
-        metrics['log p(z)'] = model.nodes['z']['log_prob'].mean()
-        metrics['log q(z)'] = guide.nodes['z']['log_prob'].mean()
-        metrics['log p(z) - log q(z)'] = metrics['log p(z)'] - metrics['log q(z)']
+        if self.pyro_model.n_levels > 0:
+            for i in range(self.pyro_model.n_levels):
+                metrics[f'log p(z{i})'] = model.nodes[f'z{i}']['log_prob'].mean()
+                metrics[f'log q(z{i})'] = guide.nodes[f'z{i}']['log_prob'].mean()
+        else:
+            metrics['log p(z)'] = model.nodes['z']['log_prob'].mean()
+            metrics['log q(z)'] = guide.nodes['z']['log_prob'].mean()
+            metrics['log p(z) - log q(z)'] = metrics['log p(z)'] - metrics['log q(z)']
         return metrics
 
     def _theis_noise(self, obs):
