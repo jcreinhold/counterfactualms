@@ -491,8 +491,6 @@ class BaseCovariateExperiment(pl.LightningModule):
             }
             self.build_counterfactual('do(duration=x)', obs=obs_batch, conditions=conditions)
 
-            return mse
-
     @classmethod
     def add_arguments(cls, parser):
         parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
