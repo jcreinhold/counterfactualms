@@ -70,7 +70,7 @@ class BaseSEM(PyroModule):
     @pyro_method
     def scm(self, *args, **kwargs):
         def config(msg):
-            if isinstance(msg['fn'], TransformedDistribution) and msg['name'][0] != 'z':
+            if isinstance(msg['fn'], TransformedDistribution) and 'z' not in msg['name']:
                 return TransformReparam()
             else:
                 return None
@@ -97,7 +97,7 @@ class BaseSEM(PyroModule):
 
         output = {}
         for name, node in cond_trace.nodes.items():
-            if name[0] != 'z' or 'fn' not in node.keys():
+            if 'z' in name or 'fn' not in node.keys():
                 continue
 
             fn = node['fn']
