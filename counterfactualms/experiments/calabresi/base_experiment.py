@@ -70,7 +70,7 @@ class BaseSEM(PyroModule):
     @pyro_method
     def scm(self, *args, **kwargs):
         def config(msg):
-            if isinstance(msg['fn'], TransformedDistribution) and msg['name'] != 'z':
+            if isinstance(msg['fn'], TransformedDistribution) and msg['name'][0] != 'z':
                 return TransformReparam()
             else:
                 return None
@@ -97,7 +97,7 @@ class BaseSEM(PyroModule):
 
         output = {}
         for name, node in cond_trace.nodes.items():
-            if name == 'z' or 'fn' not in node.keys():
+            if name[0] != 'z' or 'fn' not in node.keys():
                 continue
 
             fn = node['fn']
@@ -233,10 +233,7 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         if self.current_epoch % self.hparams.sample_img_interval == 0:
-            mse = self.sample_images()
-            mse = mse / 1e7
-            klz = outputs[0]['log p(z) - log q(z)'] / 1e2
-            self.log('score', mse+klz, on_step=False, on_epoch=True)
+            self.sample_images()
 
     def test_epoch_end(self, outputs):
         metrics = outputs['metrics']
@@ -369,13 +366,13 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         self.logger.experiment.add_figure(tag, fig, self.current_epoch)
 
-    def build_reconstruction(self, obs, tag='reconstruction'):
+    def build_reconstruction(self, obs, tag='recon'):
         self._check_observation(obs)
         x = obs['x']
         recon = self.pyro_model.reconstruct(obs, num_particles=self.hparams.num_sample_particles)
         self.log_img_grid(tag, torch.cat([x, recon], 0))
         mse = torch.mean(torch.square(x - recon).sum((1, 2, 3)))
-        self.logger.experiment.add_scalar(f'{tag}/mse', mse, self.current_epoch)
+        self.logger.experiment.add_scalar(f'{tag}', mse, self.current_epoch)
         return mse
 
     @property

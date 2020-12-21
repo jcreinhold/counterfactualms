@@ -122,61 +122,7 @@ class BaseVISEM(BaseSEM):
                 use_spectral_norm=self.use_spectral_norm
             )
 
-        if self.decoder_type == 'fixed_var':
-            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
-            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
-            self.decoder.logvar_head.weight.requires_grad = False
-            torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
-            self.decoder.logvar_head.bias.requires_grad = False
-
-        elif self.decoder_type == 'learned_var':
-            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
-            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
-            self.decoder.logvar_head.weight.requires_grad = False
-            torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
-            self.decoder.logvar_head.bias.requires_grad = True
-
-        elif self.decoder_type == 'independent_var':
-            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
-            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
-            self.decoder.logvar_head.weight.requires_grad = True
-            torch.nn.init.normal_(self.decoder.logvar_head.bias, self.logstd_init, 1e-1)
-            self.decoder.logvar_head.bias.requires_grad = True
-
-        elif self.decoder_type == 'multivariate_gaussian':
-            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
-            self.decoder = DeepMultivariateNormal(seq, np.prod(self.img_shape), np.prod(self.img_shape))
-
-        elif self.decoder_type == 'sharedvar_multivariate_gaussian':
-            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
-            self.decoder = DeepMultivariateNormal(seq, np.prod(self.img_shape), np.prod(self.img_shape))
-            torch.nn.init.zeros_(self.decoder.logdiag_head.weight)
-            self.decoder.logdiag_head.weight.requires_grad = False
-            torch.nn.init.zeros_(self.decoder.lower_head.weight)
-            self.decoder.lower_head.weight.requires_grad = False
-            torch.nn.init.normal_(self.decoder.logdiag_head.bias, self.logstd_init, 1e-1)
-            self.decoder.logdiag_head.bias.requires_grad = True
-
-        elif self.decoder_type == 'lowrank_multivariate_gaussian':
-            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
-            self.decoder = DeepLowRankMultivariateNormal(
-                seq, np.prod(self.img_shape), np.prod(self.img_shape), decoder_cov_rank
-            )
-
-        elif self.decoder_type == 'sharedvar_lowrank_multivariate_gaussian':
-            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
-            self.decoder = DeepLowRankMultivariateNormal(
-                seq, np.prod(self.img_shape), np.prod(self.img_shape), decoder_cov_rank
-            )
-            torch.nn.init.zeros_(self.decoder.logdiag_head.weight)
-            self.decoder.logdiag_head.weight.requires_grad = False
-            torch.nn.init.zeros_(self.decoder.factor_head.weight)
-            self.decoder.factor_head.weight.requires_grad = False
-            torch.nn.init.normal_(self.decoder.logdiag_head.bias, self.logstd_init, 1e-1)
-            self.decoder.logdiag_head.bias.requires_grad = True
-
-        else:
-            raise ValueError(f'unknown decoder type {self.decoder_type}.')
+        self._create_decoder(decoder)
 
         # encoder parts
         if self.use_nvae:
@@ -308,6 +254,63 @@ class BaseVISEM(BaseSEM):
             self.posterior_flow_components = flow_(self.latent_dim, **flow_kwargs) if self.use_posterior_flow else []
             self.posterior_flow_transforms = [self.posterior_flow_components]
 
+    def _create_decoder(self, decoder):
+        if self.decoder_type == 'fixed_var':
+            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
+            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
+            self.decoder.logvar_head.weight.requires_grad = False
+            torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
+            self.decoder.logvar_head.bias.requires_grad = False
+
+        elif self.decoder_type == 'learned_var':
+            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
+            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
+            self.decoder.logvar_head.weight.requires_grad = False
+            torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
+            self.decoder.logvar_head.bias.requires_grad = True
+
+        elif self.decoder_type == 'independent_var':
+            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
+            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
+            self.decoder.logvar_head.weight.requires_grad = True
+            torch.nn.init.normal_(self.decoder.logvar_head.bias, self.logstd_init, 1e-1)
+            self.decoder.logvar_head.bias.requires_grad = True
+
+        elif self.decoder_type == 'multivariate_gaussian':
+            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
+            self.decoder = DeepMultivariateNormal(seq, np.prod(self.img_shape), np.prod(self.img_shape))
+
+        elif self.decoder_type == 'sharedvar_multivariate_gaussian':
+            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
+            self.decoder = DeepMultivariateNormal(seq, np.prod(self.img_shape), np.prod(self.img_shape))
+            torch.nn.init.zeros_(self.decoder.logdiag_head.weight)
+            self.decoder.logdiag_head.weight.requires_grad = False
+            torch.nn.init.zeros_(self.decoder.lower_head.weight)
+            self.decoder.lower_head.weight.requires_grad = False
+            torch.nn.init.normal_(self.decoder.logdiag_head.bias, self.logstd_init, 1e-1)
+            self.decoder.logdiag_head.bias.requires_grad = True
+
+        elif self.decoder_type == 'lowrank_multivariate_gaussian':
+            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
+            self.decoder = DeepLowRankMultivariateNormal(
+                seq, np.prod(self.img_shape), np.prod(self.img_shape), self.decoder_cov_rank
+            )
+
+        elif self.decoder_type == 'sharedvar_lowrank_multivariate_gaussian':
+            seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
+            self.decoder = DeepLowRankMultivariateNormal(
+                seq, np.prod(self.img_shape), np.prod(self.img_shape), self.decoder_cov_rank
+            )
+            torch.nn.init.zeros_(self.decoder.logdiag_head.weight)
+            self.decoder.logdiag_head.weight.requires_grad = False
+            torch.nn.init.zeros_(self.decoder.factor_head.weight)
+            self.decoder.factor_head.weight.requires_grad = False
+            torch.nn.init.normal_(self.decoder.logdiag_head.bias, self.logstd_init, 1e-1)
+            self.decoder.logdiag_head.bias.requires_grad = True
+
+        else:
+            raise ValueError(f'unknown decoder type {self.decoder_type}.')
+
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if 'flow_lognorm_loc' in name:
@@ -332,8 +335,11 @@ class BaseVISEM(BaseSEM):
     def _get_preprocess_transforms(self):
         return super()._get_preprocess_transforms().inv
 
-    def _get_transformed_x_dist(self, latent):
-        x_pred_dist = self.decoder.predict(latent)  # returns a normal dist with mean of the predicted image
+    def _get_transformed_x_dist(self, latent, ctx=None):
+        if ctx is not None:
+            x_pred_dist = self.decoder.predict(latent, ctx)  # returns a normal dist with mean of the predicted image
+        else:
+            x_pred_dist = self.decoder.predict(latent)  # returns a normal dist with mean of the predicted image
         if self.laplace_likelihood:
             x_base_dist = Laplace(self.x_base_loc, self.x_base_scale).to_event(3)
         else:
@@ -651,7 +657,6 @@ class SVIExperiment(BaseCovariateExperiment):
             raise ValueError('loss went to nan with metrics:\n{}'.format(metrics))
         for k, v in metrics.items():
             self.log('train/' + k, v, on_step=False, on_epoch=True)
-        self.log('klz', metrics['log p(z) - log q(z)'], on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):

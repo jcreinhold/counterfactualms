@@ -79,21 +79,21 @@ _buffers_to_load = ('norm', 'permutation', 'slice_number')
 
 def get_best_model(model_paths):
     min_score = np.inf
-    min_klz = np.inf
+    min_other = np.inf
     idx = None
     model_paths = [mp for mp in model_paths if 'last' not in mp]
     for i, mp in enumerate(model_paths):
         ms = mp.split('=')[-2:]
         ms = [re.sub('[^\d.-]+','', m) for m in ms]
-        klz = float(ms[0][:-1])
+        other = float(ms[0][:-1])
         score = float(ms[1][:-1])
         if score < min_score:
             min_score = score
-            min_klz = klz
+            min_other = other
             idx = i
         elif score == min_score:
-            if klz < min_klz:
-                min_klz = klz
+            if other < min_other:
+                min_other = other
                 idx = i
     return model_paths[idx]
 

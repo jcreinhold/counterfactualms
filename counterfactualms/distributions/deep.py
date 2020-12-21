@@ -21,14 +21,14 @@ class _DeepIndepNormal(DeepConditional):
         self.mean_head = mean_head
         self.logvar_head = logvar_head
 
-    def forward(self, x):
-        h = self.backbone(x)
+    def forward(self, x, ctx=None):
+        h = self.backbone(x) if ctx is None else self.backbone(x, ctx)
         mean = self.mean_head(h)
         logvar = self.logvar_head(h)
         return mean, logvar
 
-    def predict(self, x) -> Independent:
-        mean, logvar = self(x)
+    def predict(self, x, ctx=None) -> Independent:
+        mean, logvar = self(x, ctx)
         std = (.5 * logvar).exp() + 1e-5
         event_ndim = len(mean.shape[1:])  # keep only batch dimension
         return Normal(mean, std).to_event(event_ndim)
