@@ -372,8 +372,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         recon = self.pyro_model.reconstruct(obs, num_particles=self.hparams.num_sample_particles)
         self.log_img_grid(tag, torch.cat([x, recon], 0))
         mse = torch.mean(torch.square(x - recon).sum((1, 2, 3)))
-        self.logger.experiment.add_scalar(f'{tag}', mse, self.current_epoch)
-        return mse
+        self.log(f'{tag}', mse)
 
     @property
     def required_data(self):
@@ -448,7 +447,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.log_img_grid('input', obs_batch['x'], save_img=True)
 
             if hasattr(self.pyro_model, 'reconstruct'):
-                mse = self.build_reconstruction(obs_batch)
+                self.build_reconstruction(obs_batch)
 
             conditions = {
                 '20': {'age': torch.zeros_like(obs_batch['age']) + 20},
