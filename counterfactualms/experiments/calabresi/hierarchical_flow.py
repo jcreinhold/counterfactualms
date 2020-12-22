@@ -30,7 +30,7 @@ class BaseHierarchicalVISEM(BaseVISEM):
                                            use_spectral_norm=self.use_spectral_norm,
                                            hierarchical_layers=self.hierarchical_layers)
         decoder = HierarchicalDecoder(num_convolutions=self.num_convolutions, filters=self.dec_filters,
-                                      latent_dim=self.latent_dim, div_factor=hierarchical_div,
+                                      latent_dim=self.latent_dim+self.context_dim, div_factor=hierarchical_div,
                                       output_size=self.img_shape, use_weight_norm=self.use_weight_norm,
                                       use_spectral_norm=self.use_spectral_norm,
                                       hierarchical_layers=self.hierarchical_layers,
@@ -244,7 +244,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
                 z_dist = RelaxedBernoulliStraightThrough(temperature, probs=z_probs).to_event(3)
             with poutine.scale(scale=self.annealing_factor):
                 z.append(pyro.sample(f'z{i}', z_dist))
-        z[0] = torch.cat([z[0], ctx], 1)
+        z[-1] = torch.cat([z[-1], ctx], 1)
 
         x_dist = self._get_transformed_x_dist(z, ctx)  # run decoder
         x = pyro.sample('x', x_dist)
@@ -270,7 +270,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
                 last_layer = layer == self.last_layer
                 if last_layer:
                     hidden_i = torch.cat([hidden[i], ctx], 1)
-                    z_base_dist = self.latent_encoder.predict(hidden_i)
+                    z_base_dist = latent_enc.predict(hidden_i)
                     z_dist = TransformedDistribution(z_base_dist, self.posterior_flow_transforms) if self.use_posterior_flow else z_base_dist
                     _ = self.posterior_affine
                     _ = self.posterior_flow_components
