@@ -2,7 +2,7 @@ import numpy as np
 import pyro
 from pyro.nn import pyro_method
 from pyro.distributions import (
-    Normal, Bernoulli, Uniform, TransformedDistribution  # noqa: F401
+    Normal, Bernoulli, RelaxedBernoulliStraightThrough, Uniform, TransformedDistribution  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
@@ -10,9 +10,8 @@ import torch
 from torch import nn
 
 from counterfactualms.arch.hierarchical import HierarchicalDecoder, HierarchicalEncoder
-from counterfactualms.arch.thirdparty.neural_operations import Swish
-from counterfactualms.arch.layers import Conv2d
-from counterfactualms.distributions.deep import Conv2dIndepNormal
+from counterfactualms.arch.thirdparty.neural_operations import Swish, Identity, Conv2d
+from counterfactualms.distributions.deep import Conv2dIndepNormal, DeepBernoulli
 from counterfactualms.experiments.calabresi.base_experiment import MODEL_REGISTRY
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM
 from counterfactualms.utils.pyro_modifications import conditional_spline
@@ -34,31 +33,37 @@ class BaseHierarchicalVISEM(BaseVISEM):
                                       hierarchical_layers=self.hierarchical_layers,
                                       context_dim=self.context_dim)
         self._create_decoder(decoder)
-        self.context_attn = nn.ModuleList([])
+        self.guide_ctx_attn = nn.ModuleList([])
         self.latent_encoder = nn.ModuleList([])
         del self.z_loc, self.z_scale
         self.intermediate_shapes = self.encoder.intermediate_shapes
         if not all([np.all(eis == dis) for eis, dis in zip(self.intermediate_shapes, decoder.intermediate_shapes[::-1])]):
             msg = f'Encoder and decoder intermediate shapes are mismatched. E: {self.intermediate_shapes}; D: {decoder.intermediate_shapes[::-1]}'
             raise ValueError(msg)
+        if len(self.hierarchical_layers) != len(self.intermediate_shapes):
+            raise ValueError('Something went wrong. The # of hierarchical layers != # of intermediate shapes')
         self.n_levels = len(self.intermediate_shapes)
-        for i, z_size in enumerate(self.intermediate_shapes):
+        self.last_layer = len(self.enc_filters)
+        for i, (z_size, layer) in enumerate(zip(self.intermediate_shapes, self.hierarchical_layers)):
             n_latent_channels = z_size[0]
-            hidden_dim = max(n_latent_channels // 4, self.context_dim)
+            hidden_dim = max(n_latent_channels, self.context_dim)
             nonlinearity = Swish() if self.use_swish else torch.nn.LeakyReLU(0.1, inplace=True)
-            self.context_attn.append(nn.Sequential(
+            self.guide_ctx_attn.append(nn.Sequential(
                 nn.Linear(self.context_dim, hidden_dim),
                 nonlinearity,
                 nn.Linear(hidden_dim, n_latent_channels),
                 nn.Sigmoid()
             ))
-            backbone = nn.Sequential(Conv2d(n_latent_channels, n_latent_channels, 3, padding=1,
-                                            use_weight_norm=self.use_weight_norm,
-                                            use_spectral_norm=self.use_spectral_norm),
-                                     nonlinearity)
-            self.latent_encoder.append(Conv2dIndepNormal(backbone, n_latent_channels, n_latent_channels))
-            self.register_buffer(f'z_loc_{i}', torch.zeros(z_size.tolist(), requires_grad=False))
-            self.register_buffer(f'z_scale_{i}', torch.ones(z_size.tolist(), requires_grad=False))
+            last_layer = layer == self.last_layer
+            if last_layer:
+                self.latent_encoder.append(Conv2dIndepNormal(Identity(), n_latent_channels, n_latent_channels))
+                self.register_buffer(f'z_loc', torch.zeros(z_size.tolist(), requires_grad=False))
+                self.register_buffer(f'z_scale', torch.ones(z_size.tolist(), requires_grad=False))
+            else:
+                self.latent_encoder.append(DeepBernoulli(Conv2d(n_latent_channels, n_latent_channels, 1,
+                                                                use_weight_norm=self.use_weight_norm,
+                                                                use_spectral_norm=self.use_spectral_norm)))
+                self.register_buffer(f'z_prob_{i}', 0.5*torch.ones(z_size.tolist(), requires_grad=False))
 
     @pyro_method
     def infer(self, obs):
@@ -224,9 +229,12 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
 
         z = []
         for i in range(self.n_levels):
-            z_loc = getattr(self, f'z_loc_{i}')
-            z_scale = getattr(self, f'z_scale_{i}')
-            z_dist = Normal(z_loc, z_scale).to_event(3)
+            last_layer = self.hierarchical_layers[i] == self.last_layer
+            if last_layer:
+                z_dist = Normal(self.z_loc, self.z_scale).to_event(3)
+            else:
+                z_probs = getattr(self, 'z_probs_{i}')
+                z_dist = RelaxedBernoulliStraightThrough(2./3., probs=z_probs).to_event(3)
             with poutine.scale(scale=self.annealing_factor):
                 z.append(pyro.sample(f'z{i}', z_dist))
 
@@ -249,7 +257,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
             ctx = torch.cat([ventricle_volume_, brain_volume_, lesion_volume_, slice_number], 1)
 
             z = []
-            for i, (latent_enc, ctx_attn) in enumerate(zip(self.latent_encoder,self.context_attn)):
+            for i, (latent_enc, ctx_attn) in enumerate(zip(self.latent_encoder, self.guide_ctx_attn)):
                 ctx_ = ctx_attn(ctx).view(batch_size, -1, 1, 1)
                 hidden_i = hidden[i] * ctx_
                 z_dist = latent_enc.predict(hidden_i)

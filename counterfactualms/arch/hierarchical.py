@@ -9,7 +9,8 @@ from counterfactualms.arch.layers import Conv2d, ConvTranspose2d
 
 class HierarchicalEncoder(nn.Module):
     def __init__(self, num_convolutions=3, filters=(16,32,64,128,256), input_size=(1,128,128),
-                 use_weight_norm=False, use_spectral_norm=False, hierarchical_layers=(1,3,5)):
+                 use_weight_norm=False, use_spectral_norm=False, hierarchical_layers=(1,3,5),
+                 div_factor=8, last_div_factor=8):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -19,6 +20,7 @@ class HierarchicalEncoder(nn.Module):
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
         self.hierarchical_layers = hierarchical_layers
+        self.div_factor = div_factor
 
         self.down_layers = nn.ModuleList([])
         self.resolution_layers = nn.ModuleList([])
@@ -32,16 +34,17 @@ class HierarchicalEncoder(nn.Module):
                 cur_channels = c
             self.resolution_layers.append(nn.Sequential(*resolution_layer))
             if i in self.hierarchical_layers:
-                self.out_layers.append(self._conv(cur_channels, cur_channels, 1, bias=True))
+                out_channels = max(cur_channels // div_factor, 1)
+                self.out_layers.append(self._conv(cur_channels, out_channels, 1, bias=True))
+                self.intermediate_shapes.append(np.array(input_size) // (2 ** i))
+                self.intermediate_shapes[-1][0] = out_channels
             self.down_layers.append(nn.Sequential(*self._down_conv_layer(cur_channels, c)))
             cur_channels = c
-            if i in self.hierarchical_layers:
-                self.intermediate_shapes.append(np.array(input_size) // (2 ** i))
-                self.intermediate_shapes[-1][0] = cur_channels
         if len(filters) in self.hierarchical_layers:
-            self.out_layers.append(self._conv(cur_channels, cur_channels, 1, bias=True))
+            out_channels = max(cur_channels // last_div_factor, 1)
+            self.out_layers.append(self._conv(cur_channels, out_channels, 1, bias=True))
             self.intermediate_shapes.append(np.array(input_size) // (2 ** len(filters)))
-            self.intermediate_shapes[-1][0] = cur_channels
+            self.intermediate_shapes[-1][0] = out_channels
 
     @property
     def _conv(self):
@@ -74,7 +77,7 @@ class HierarchicalEncoder(nn.Module):
 class HierarchicalDecoder(nn.Module):
     def __init__(self, num_convolutions=3, filters=(256,128,64,32,16), output_size=(1,128,128),
                  upconv=False, use_weight_norm=False, use_spectral_norm=False, hierarchical_layers=(1,3,5),
-                 context_dim=4):
+                 context_dim=4, div_factor=8, first_div_factor=8):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -87,6 +90,7 @@ class HierarchicalDecoder(nn.Module):
         self.hierarchical_layers = hierarchical_layers
         hierarchical_layers_ = [h for h in hierarchical_layers if h != len(filters)]
         self.context_dim = context_dim
+        self.div_factor = div_factor
 
         self.resolution_layers = nn.ModuleList([])
         self.up_layers = nn.ModuleList([])
@@ -94,24 +98,27 @@ class HierarchicalDecoder(nn.Module):
         self.context_attention = nn.ModuleList([])
 
         cur_channels = filters[0]
+        in_channels = max(cur_channels // first_div_factor, 1)
         self.start_context_attention = self._attn(cur_channels)
-        self.start_up_layer = nn.Sequential(*self._upsample_layer(cur_channels, cur_channels))
+        self.start_up_layer = nn.Sequential(*self._upsample_layer(in_channels, cur_channels))
         if len(filters) in hierarchical_layers:
+            in_channels = max(cur_channels // div_factor, 1)
             self.intermediate_shapes.append(np.array(output_size) // (2 ** (len(filters))))
-            self.intermediate_shapes[-1][0] = cur_channels
+            self.intermediate_shapes[-1][0] = in_channels
         for i, c in enumerate(filters[1:], 1):
             resolution_layer = []
             i = (len(filters) - i)
-            output_layer = i in hierarchical_layers_
+            input_layer = i in hierarchical_layers_
+            in_channels = max(cur_channels // div_factor, 1)
             for j in range(0, num_convolutions - 1):
-                ci = (2*cur_channels) if j == 0 and output_layer else cur_channels
+                ci = (in_channels+cur_channels) if j == 0 and input_layer else cur_channels
                 resolution_layer += self._conv_layer(ci, cur_channels)
             self.resolution_layers.append(nn.Sequential(*resolution_layer))
             self.context_attention.append(self._attn(cur_channels))
             self.up_layers.append(nn.Sequential(*self._upsample_layer(cur_channels, c)))
-            if output_layer:
+            if input_layer:
                 self.intermediate_shapes.append(np.array(output_size) // (2 ** i))
-                self.intermediate_shapes[-1][0] = cur_channels
+                self.intermediate_shapes[-1][0] = in_channels
             cur_channels = c
 
         final_layer = self._conv_layer(cur_channels, cur_channels)

@@ -2,7 +2,7 @@ import torch
 from pyro.distributions import (
     Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
     Independent, MultivariateNormal, Normal, TorchDistribution,
-    MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance
+    MixtureOfDiagNormalsSharedCovariance, RelaxedBernoulliStraightThrough
 )
 from torch import nn
 
@@ -252,7 +252,7 @@ class DeepBernoulli(DeepConditional):
     def predict(self, z) -> Independent:
         logits = self(z)
         event_ndim = len(logits.shape[1:])  # keep only batch dimension
-        return Bernoulli(logits=logits).to_event(event_ndim)
+        return RelaxedBernoulliStraightThrough(2./3., logits=logits).to_event(event_ndim)
 
 
 if __name__ == '__main__':
