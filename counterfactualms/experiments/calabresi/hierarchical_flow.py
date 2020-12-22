@@ -22,13 +22,17 @@ class BaseHierarchicalVISEM(BaseVISEM):
     def __init__(self, *args, **kwargs):
         kwargs['n_prior_flows'] = 0
         kwargs['n_posterior_flows'] = 0
+        self.hierarchical_layers = kwargs['hierarchical_layers']
         super().__init__(*args, **kwargs)
         self.encoder = HierarchicalEncoder(num_convolutions=self.num_convolutions, filters=self.enc_filters,
                                            input_size=self.img_shape, use_weight_norm=self.use_weight_norm,
-                                           use_spectral_norm=self.use_spectral_norm)
+                                           use_spectral_norm=self.use_spectral_norm,
+                                           hierarchical_layers=self.hierarchical_layers)
         decoder = HierarchicalDecoder(num_convolutions=self.num_convolutions, filters=self.dec_filters,
                                       output_size=self.img_shape, use_weight_norm=self.use_weight_norm,
-                                      use_spectral_norm=self.use_spectral_norm, context_dim=self.context_dim)
+                                      use_spectral_norm=self.use_spectral_norm,
+                                      hierarchical_layers=self.hierarchical_layers,
+                                      context_dim=self.context_dim)
         self._create_decoder(decoder)
         self.context_attn = nn.ModuleList([])
         self.latent_encoder = nn.ModuleList([])
