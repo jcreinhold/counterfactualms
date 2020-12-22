@@ -2,7 +2,7 @@ import numpy as np
 import pyro
 from pyro.nn import pyro_method
 from pyro.distributions import (
-    Normal, Bernoulli, Uniform, TransformedDistribution  # noqa: F401
+    Normal, Bernoulli, Uniform, RelaxedBernoulliStraightThrough, TransformedDistribution  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
@@ -10,11 +10,9 @@ import torch
 from torch import nn
 
 from counterfactualms.arch.hierarchical import HierarchicalDecoder, HierarchicalEncoder
-from counterfactualms.arch.thirdparty.neural_operations import Swish, Identity, Conv2d
-from counterfactualms.distributions.deep import Conv2dIndepNormal
+from counterfactualms.arch.thirdparty.neural_operations import Swish, Conv2d
 from counterfactualms.distributions.relaxed import (
-    RelaxedOneHotCategoricalStraightThrough2D,
-    DeepRelaxedOneHotCategoricalStraightThrough2D
+    DeepRelaxedBernoulli
 )
 from counterfactualms.experiments.calabresi.base_experiment import MODEL_REGISTRY
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM
@@ -22,16 +20,17 @@ from counterfactualms.utils.pyro_modifications import conditional_spline
 
 
 class BaseHierarchicalVISEM(BaseVISEM):
-    def __init__(self, hierarchical_layers=(1,3,5), *args, **kwargs):
+    def __init__(self, hierarchical_layers=(1,3,5), hierarchical_div=16, *args, **kwargs):
         self.hierarchical_layers = hierarchical_layers
+        self.hierarchical_div = hierarchical_div
         super().__init__(*args, **kwargs)
         self.encoder = HierarchicalEncoder(num_convolutions=self.num_convolutions, filters=self.enc_filters,
-                                           latent_dim=self.latent_dim,
+                                           latent_dim=self.latent_dim, div_factor=hierarchical_div,
                                            input_size=self.img_shape, use_weight_norm=self.use_weight_norm,
                                            use_spectral_norm=self.use_spectral_norm,
                                            hierarchical_layers=self.hierarchical_layers)
         decoder = HierarchicalDecoder(num_convolutions=self.num_convolutions, filters=self.dec_filters,
-                                      latent_dim=self.latent_dim,
+                                      latent_dim=self.latent_dim, div_factor=hierarchical_div,
                                       output_size=self.img_shape, use_weight_norm=self.use_weight_norm,
                                       use_spectral_norm=self.use_spectral_norm,
                                       hierarchical_layers=self.hierarchical_layers,
@@ -62,12 +61,12 @@ class BaseHierarchicalVISEM(BaseVISEM):
             if last_layer:
                 self.latent_encoder.append(latent_encoder_)
             else:
-                self.latent_encoder.append(DeepRelaxedOneHotCategoricalStraightThrough2D(
+                self.latent_encoder.append(DeepRelaxedBernoulli(
                     Conv2d(n_latent_channels, n_latent_channels, 1,
                            use_weight_norm=self.use_weight_norm,
                            use_spectral_norm=self.use_spectral_norm))
                 )
-                self.register_buffer(f'z_probs_{i}', torch.softmax(torch.ones(z_size.tolist(), requires_grad=False),0))
+                self.register_buffer(f'z_probs_{i}', 0.5*torch.ones(z_size.tolist(), requires_grad=False))
 
     @pyro_method
     def infer(self, obs):
@@ -242,8 +241,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
             else:
                 z_probs = getattr(self, f'z_probs_{i}')
                 temperature = torch.tensor(2./3., device=ctx.device, requires_grad=False)
-                event_dim = 3 - 1  # subtract 1 due to way categorical setup
-                z_dist = RelaxedOneHotCategoricalStraightThrough2D(temperature, probs=z_probs).to_event(event_dim)
+                z_dist = RelaxedBernoulliStraightThrough(temperature, probs=z_probs).to_event(3)
             with poutine.scale(scale=self.annealing_factor):
                 z.append(pyro.sample(f'z{i}', z_dist))
         z[0] = torch.cat([z[0], ctx], 1)
