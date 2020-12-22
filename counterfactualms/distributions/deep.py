@@ -2,7 +2,7 @@ import torch
 from pyro.distributions import (
     Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
     Independent, MultivariateNormal, Normal, TorchDistribution,
-    MixtureOfDiagNormalsSharedCovariance, RelaxedBernoulliStraightThrough
+    MixtureOfDiagNormalsSharedCovariance
 )
 from torch import nn
 
@@ -251,9 +251,8 @@ class DeepBernoulli(DeepConditional):
 
     def predict(self, z) -> Independent:
         logits = self(z)
-        temperature = torch.tensor(2./3., device=z.device, requires_grad=False)
         event_ndim = len(logits.shape[1:])  # keep only batch dimension
-        return RelaxedBernoulliStraightThrough(temperature, logits=logits).to_event(event_ndim)
+        return Bernoulli(logits=logits).to_event(event_ndim)
 
 
 if __name__ == '__main__':

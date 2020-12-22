@@ -8,9 +8,9 @@ from counterfactualms.arch.layers import Conv2d, ConvTranspose2d
 
 
 class HierarchicalEncoder(nn.Module):
-    def __init__(self, num_convolutions=3, filters=(16,32,64,128,256), input_size=(1,128,128),
-                 use_weight_norm=False, use_spectral_norm=False, hierarchical_layers=(1,3,5),
-                 div_factor=8, last_div_factor=8):
+    def __init__(self, num_convolutions=3, filters=(16,32,64,128,256), latent_dim=100,
+                 input_size=(1,128,128), use_weight_norm=False, use_spectral_norm=False,
+                 hierarchical_layers=(1,3,5), div_factor=8):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -41,10 +41,14 @@ class HierarchicalEncoder(nn.Module):
             self.down_layers.append(nn.Sequential(*self._down_conv_layer(cur_channels, c)))
             cur_channels = c
         if len(filters) in self.hierarchical_layers:
-            out_channels = max(cur_channels // last_div_factor, 1)
-            self.out_layers.append(self._conv(cur_channels, out_channels, 1, bias=True))
             self.intermediate_shapes.append(np.array(input_size) // (2 ** len(filters)))
-            self.intermediate_shapes[-1][0] = out_channels
+            self.intermediate_shapes[-1][0] = cur_channels
+
+        self.fc = nn.Sequential(
+            nn.Linear(np.prod(self.intermediate_shapes[-1]), latent_dim, bias=False),
+            nn.BatchNorm1d(latent_dim),
+            nn.LeakyReLU(.1, inplace=True)
+        )
 
     @property
     def _conv(self):
@@ -70,14 +74,15 @@ class HierarchicalEncoder(nn.Module):
                 c += 1
             x = down(x)
         if len(self.filters) in self.hierarchical_layers:
-            out.append(self.out_layers[-1](x))
+            x = x.view(-1, np.prod(self.intermediate_shapes[-1]))
+            out.append(self.fc(x))
         return out
 
 
 class HierarchicalDecoder(nn.Module):
-    def __init__(self, num_convolutions=3, filters=(256,128,64,32,16), output_size=(1,128,128),
+    def __init__(self, num_convolutions=3, filters=(256,128,64,32,16), latent_dim=100, output_size=(1,128,128),
                  upconv=False, use_weight_norm=False, use_spectral_norm=False, hierarchical_layers=(1,3,5),
-                 context_dim=4, div_factor=8, first_div_factor=8):
+                 context_dim=4, div_factor=8):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -98,13 +103,11 @@ class HierarchicalDecoder(nn.Module):
         self.context_attention = nn.ModuleList([])
 
         cur_channels = filters[0]
-        in_channels = max(cur_channels // first_div_factor, 1)
         self.start_context_attention = self._attn(cur_channels)
-        self.start_up_layer = nn.Sequential(*self._upsample_layer(in_channels, cur_channels))
+        self.start_up_layer = nn.Sequential(*self._upsample_layer(cur_channels, cur_channels))
         if len(filters) in hierarchical_layers:
-            in_channels = max(cur_channels // div_factor, 1)
             self.intermediate_shapes.append(np.array(output_size) // (2 ** (len(filters))))
-            self.intermediate_shapes[-1][0] = in_channels
+            self.intermediate_shapes[-1][0] = cur_channels
         for i, c in enumerate(filters[1:], 1):
             resolution_layer = []
             i = (len(filters) - i)
@@ -124,6 +127,12 @@ class HierarchicalDecoder(nn.Module):
         final_layer = self._conv_layer(cur_channels, cur_channels)
         final_layer.append(self._conv(cur_channels, 1, 1, 1, bias=True))
         self.final_layer = nn.Sequential(*final_layer)
+
+        self.fc = nn.Sequential(
+            nn.Linear(latent_dim, np.prod(self.intermediate_shapes[0]), bias=False),
+            nn.BatchNorm1d(np.prod(self.intermediate_shapes[0])),
+            nn.LeakyReLU(.1, inplace=True)
+        )
 
     @property
     def _conv(self):
@@ -160,7 +169,8 @@ class HierarchicalDecoder(nn.Module):
         batch_size = ctx.size(0)
         layers = zip(self.resolution_layers, self.up_layers, self.context_attention)
         ctx_attn = self.start_context_attention(ctx).view(batch_size, -1, 1, 1)
-        y = self.start_up_layer(x.pop()) * ctx_attn
+        y = self.fc(x.pop()).view(-1, *self.intermediate_shapes[0])
+        y = self.start_up_layer(y) * ctx_attn
         for i, (conv, up, attn) in enumerate(layers, 1):
             i = len(self.filters) - i
             output_layer = i in self.hierarchical_layers
@@ -179,8 +189,10 @@ if __name__ == "__main__":
     dec = HierarchicalDecoder(hierarchical_layers=hl)
     print(enc.intermediate_shapes)
     print(dec.intermediate_shapes)
-    ctx = torch.randn(1, 4)
-    x = torch.randn(1, 1, 128, 128)
+    ctx = torch.randn(2, 4)
+    x = torch.randn(2, 1, 128, 128)
     y = enc(x)
     z = dec(y, ctx)
     assert z.shape == x.shape
+    print(enc)
+    print(dec)
