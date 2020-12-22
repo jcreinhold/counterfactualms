@@ -63,7 +63,7 @@ class BaseHierarchicalVISEM(BaseVISEM):
                 self.latent_encoder.append(DeepBernoulli(Conv2d(n_latent_channels, n_latent_channels, 1,
                                                                 use_weight_norm=self.use_weight_norm,
                                                                 use_spectral_norm=self.use_spectral_norm)))
-                self.register_buffer(f'z_prob_{i}', 0.5*torch.ones(z_size.tolist(), requires_grad=False))
+                self.register_buffer(f'z_probs_{i}', 0.5*torch.ones(z_size.tolist(), requires_grad=False))
 
     @pyro_method
     def infer(self, obs):
@@ -233,8 +233,9 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
             if last_layer:
                 z_dist = Normal(self.z_loc, self.z_scale).to_event(3)
             else:
-                z_probs = getattr(self, 'z_probs_{i}')
-                z_dist = RelaxedBernoulliStraightThrough(2./3., probs=z_probs).to_event(3)
+                z_probs = getattr(self, f'z_probs_{i}')
+                temperature = torch.tensor(2./3., device=ctx.device, requires_grad=False)
+                z_dist = RelaxedBernoulliStraightThrough(temperature, probs=z_probs).to_event(3)
             with poutine.scale(scale=self.annealing_factor):
                 z.append(pyro.sample(f'z{i}', z_dist))
 
