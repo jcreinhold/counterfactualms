@@ -19,10 +19,10 @@ from counterfactualms.utils.pyro_modifications import conditional_spline
 
 
 class BaseHierarchicalVISEM(BaseVISEM):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, hierarchical_layers=(1,3,5), *args, **kwargs):
         kwargs['n_prior_flows'] = 0
         kwargs['n_posterior_flows'] = 0
-        self.hierarchical_layers = kwargs['hierarchical_layers']
+        self.hierarchical_layers = hierarchical_layers
         super().__init__(*args, **kwargs)
         self.encoder = HierarchicalEncoder(num_convolutions=self.num_convolutions, filters=self.enc_filters,
                                            input_size=self.img_shape, use_weight_norm=self.use_weight_norm,
@@ -38,7 +38,9 @@ class BaseHierarchicalVISEM(BaseVISEM):
         self.latent_encoder = nn.ModuleList([])
         del self.z_loc, self.z_scale
         self.intermediate_shapes = self.encoder.intermediate_shapes
-        assert all([np.all(eis == dis) for eis, dis in zip(self.intermediate_shapes, decoder.intermediate_shapes[::-1])])
+        if not all([np.all(eis == dis) for eis, dis in zip(self.intermediate_shapes, decoder.intermediate_shapes[::-1])]):
+            msg = f'Encoder and decoder intermediate shapes are mismatched. E: {self.intermediate_shapes}; D: {decoder.intermediate_shapes[::-1]}'
+            raise ValueError(msg)
         self.n_levels = len(self.intermediate_shapes)
         for i, z_size in enumerate(self.intermediate_shapes):
             n_latent_channels = z_size[0]

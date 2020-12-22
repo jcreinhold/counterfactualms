@@ -84,7 +84,8 @@ class HierarchicalDecoder(nn.Module):
             raise ValueError('Cannot use both weight norm and spectral norm.')
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
-        self.hierarchical_layers = [h for h in hierarchical_layers if h != len(filters)]
+        self.hierarchical_layers = hierarchical_layers
+        hierarchical_layers_ = [h for h in hierarchical_layers if h != len(filters)]
         self.context_dim = context_dim
 
         self.resolution_layers = nn.ModuleList([])
@@ -98,16 +99,18 @@ class HierarchicalDecoder(nn.Module):
         if len(filters) in hierarchical_layers:
             self.intermediate_shapes.append(np.array(output_size) // (2 ** (len(filters))))
             self.intermediate_shapes[-1][0] = cur_channels
-        for i, c in enumerate(filters[1:]):
+        for i, c in enumerate(filters[1:], 1):
             resolution_layer = []
+            i = (len(filters) - i)
+            output_layer = i in hierarchical_layers_
             for j in range(0, num_convolutions - 1):
-                ci = (2*cur_channels) if j == 0 and i in self.hierarchical_layers else cur_channels
+                ci = (2*cur_channels) if j == 0 and output_layer else cur_channels
                 resolution_layer += self._conv_layer(ci, cur_channels)
             self.resolution_layers.append(nn.Sequential(*resolution_layer))
             self.context_attention.append(self._attn(cur_channels))
             self.up_layers.append(nn.Sequential(*self._upsample_layer(cur_channels, c)))
-            if i in self.hierarchical_layers:
-                self.intermediate_shapes.append(np.array(output_size) // (2 ** (len(filters)-i-1)))
+            if output_layer:
+                self.intermediate_shapes.append(np.array(output_size) // (2 ** i))
                 self.intermediate_shapes[-1][0] = cur_channels
             cur_channels = c
 
@@ -151,9 +154,11 @@ class HierarchicalDecoder(nn.Module):
         layers = zip(self.resolution_layers, self.up_layers, self.context_attention)
         ctx_attn = self.start_context_attention(ctx).view(batch_size, -1, 1, 1)
         y = self.start_up_layer(x.pop()) * ctx_attn
-        for i, (conv, up, attn) in enumerate(layers):
+        for i, (conv, up, attn) in enumerate(layers, 1):
+            i = len(self.filters) - i
+            output_layer = i in self.hierarchical_layers
             ctx_attn = attn(ctx).view(batch_size, -1, 1, 1)
-            if i in self.hierarchical_layers:
+            if output_layer:
                 y = torch.cat([y, x.pop()], 1)
             y = conv(y) * ctx_attn
             y = up(y)
@@ -162,8 +167,11 @@ class HierarchicalDecoder(nn.Module):
 
 
 if __name__ == "__main__":
-    enc = HierarchicalEncoder()
-    dec = HierarchicalDecoder()
+    hl = (3, 5)
+    enc = HierarchicalEncoder(hierarchical_layers=hl)
+    dec = HierarchicalDecoder(hierarchical_layers=hl)
+    print(enc.intermediate_shapes)
+    print(dec.intermediate_shapes)
     ctx = torch.randn(1, 4)
     x = torch.randn(1, 1, 128, 128)
     y = enc(x)
