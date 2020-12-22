@@ -370,7 +370,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         self._check_observation(obs)
         x = obs['x']
         recon = self.pyro_model.reconstruct(obs, num_particles=self.hparams.num_sample_particles)
-        self.log_img_grid(tag, torch.cat([x, recon], 0))
+        self.log_img_grid(tag+'_img', torch.cat([x, recon], 0))
         mse = torch.mean(torch.square(x - recon).sum((1, 2, 3)))
         self.log(f'{tag}', mse)
 
