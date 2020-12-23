@@ -81,11 +81,11 @@ def main():
     setattr(hparams, 'verbosity', exp_args.verbosity)
 
     callbacks = [ModelCheckpoint(
-        monitor='recon',
+        monitor='val_loss',
         save_top_k=10,
         save_last=True,
         mode='min',
-        filename='{epoch}-{val_loss:.2f}-{recon:.2f}'
+        filename='{epoch}-{recon:.2f}-{val_loss:.2f}'
     )]
     trainer = Trainer.from_argparse_args(lightning_args, callbacks=callbacks)
 

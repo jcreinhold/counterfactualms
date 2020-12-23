@@ -597,9 +597,11 @@ class SVIExperiment(BaseCovariateExperiment):
         for k in self.required_data:
             metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
         if self.pyro_model.n_levels > 0:
+            metrics['log p(z) - log q(z)'] = 0.
             for i in range(self.pyro_model.n_levels):
                 metrics[f'log p(z{i})'] = model.nodes[f'z{i}']['log_prob'].mean()
                 metrics[f'log q(z{i})'] = guide.nodes[f'z{i}']['log_prob'].mean()
+                metrics['log p(z) - log q(z)'] += metrics[f'log p(z{i})'] - metrics[f'log q(z{i})']
         else:
             metrics['log p(z)'] = model.nodes['z']['log_prob'].mean()
             metrics['log q(z)'] = guide.nodes['z']['log_prob'].mean()
