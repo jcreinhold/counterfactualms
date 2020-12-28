@@ -80,9 +80,9 @@ class BaseVISEM(BaseSEM):
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, use_weight_norm=False, use_spectral_norm=False, laplace_likelihood=False,
                  eps=0.1, n_prior_flows=3, n_posterior_flows=3, use_autoregressive=False, use_swish=False,
-                 use_spline=False, use_stable=False, **kwargs):
+                 use_spline=False, use_stable=False, pseudo3d=False, **kwargs):
         super().__init__(**kwargs)
-        self.img_shape = (1,) + tuple(img_shape)
+        self.img_shape = ((3,) if pseudo3d else (1,)) + tuple(img_shape)
         self.latent_dim = latent_dim
         self.prior_components = prior_components
         self.posterior_components = posterior_components
@@ -467,6 +467,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--use-spline', default=False, action='store_true', help="use spline flow for prior/post instead of affine (default: %(default)s)")
         parser.add_argument('--use-stable', default=False, action='store_true', help="use stable version of affine for prior/post instead (default: %(default)s)")
         parser.add_argument('--use-swish', default=False, action='store_true', help="use swish in flows for nonlinearity (default: %(default)s)")
+        parser.add_argument('--pseudo3d', default=False, action='store_true', help="use pseudo3d images (default: %(default)s)")
         parser.add_argument(
             '--decoder-type', default='fixed_var', help="var type (default: %(default)s)",
             choices=['fixed_var', 'learned_var', 'independent_var', 'sharedvar_multivariate_gaussian',

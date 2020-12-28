@@ -325,6 +325,9 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def log_img_grid(self, tag, imgs, normalize=True, save_img=False, **kwargs):
         imgs.clamp_(min=0., max=255.)
+        channel_dim = 1 if imgs.ndim == 4 else 0
+        if imgs.size(channel_dim) == 3:
+            imgs = imgs[:,1,...] if channel_dim == 1 else imgs[1,...]
         if save_img:
             p = os.path.join(self.trainer.logger.experiment.log_dir, f'{tag}.png')
             torchvision.utils.save_image(imgs, p)

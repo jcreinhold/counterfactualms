@@ -26,7 +26,7 @@ class HierarchicalEncoder(nn.Module):
         self.resolution_layers = nn.ModuleList([])
         self.intermediate_shapes = []
         self.out_layers = nn.ModuleList([])
-        cur_channels = 1
+        cur_channels = input_size[0]
         for i, c in enumerate(filters):
             resolution_layer = []
             for _ in range(0, num_convolutions - 1):
@@ -125,7 +125,7 @@ class HierarchicalDecoder(nn.Module):
             cur_channels = c
 
         final_layer = self._conv_layer(cur_channels, cur_channels)
-        final_layer.append(self._conv(cur_channels, 1, 1, 1, bias=True))
+        final_layer.append(self._conv(cur_channels, output_size[0], 1, 1, bias=True))
         self.final_layer = nn.Sequential(*final_layer)
 
         self.fc = nn.Sequential(
@@ -184,13 +184,22 @@ class HierarchicalDecoder(nn.Module):
 
 
 if __name__ == "__main__":
-    hl = (3, 5)
-    enc = HierarchicalEncoder(hierarchical_layers=hl)
-    dec = HierarchicalDecoder(hierarchical_layers=hl)
+    hl = (1, 2, 3, 4, 5)
+    filters = [20, 40, 80, 160, 320]
+    div_factor = 80
+    img_shape = (3,128,128)
+    enc = HierarchicalEncoder(
+        hierarchical_layers=hl, filters=filters,
+        div_factor=div_factor, input_size=img_shape
+    )
+    dec = HierarchicalDecoder(
+        hierarchical_layers=hl, filters=filters[::-1],
+        div_factor=div_factor, output_size=img_shape
+    )
     print(enc.intermediate_shapes)
     print(dec.intermediate_shapes)
     ctx = torch.randn(2, 4)
-    x = torch.randn(2, 1, 128, 128)
+    x = torch.randn(2, *img_shape)
     y = enc(x)
     z = dec(y, ctx)
     assert z.shape == x.shape

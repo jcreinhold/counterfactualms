@@ -22,7 +22,7 @@ class Encoder(nn.Module):
 
         n_resolutions = len(filters)
         filters = (filters[0],) + tuple(filters)
-        layers += [Conv2d(1, filters[0], 3, padding=1, use_weight_norm=False)]
+        layers += [Conv2d(input_size[0], filters[0], 3, padding=1, use_weight_norm=False)]
         cur_channels = filters[0]
         for ci, co in zip(filters, filters[1:]):
             cell_type = 'normal_pre'
@@ -80,7 +80,7 @@ class Decoder(nn.Module):
             layers += [Cell(cur_channels, c, cell_type=cell_type, arch=arch, use_se=True)]
             cur_channels = c
 
-        layers += [ConvBNSwish(cur_channels, cur_channels), Conv2d(cur_channels, 1, 1, 1)]
+        layers += [ConvBNSwish(cur_channels, cur_channels), Conv2d(cur_channels, output_size[0], 1, 1)]
 
         self.cnn = nn.Sequential(*layers)
 

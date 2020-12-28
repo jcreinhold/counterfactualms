@@ -20,7 +20,7 @@ class Encoder(nn.Module):
         self.use_spectral_norm = use_spectral_norm
 
         layers = []
-        cur_channels = 1
+        cur_channels = input_size[0]
         for c in filters:
             for _ in range(0, num_convolutions - 1):
                 layers += self._conv_layer(cur_channels, c)
@@ -95,7 +95,7 @@ class Decoder(nn.Module):
             cur_channels = c
 
         layers += self._conv_layer(cur_channels)
-        layers += [self._conv(cur_channels, 1, 1, 1, bias=True)]
+        layers += [self._conv(cur_channels, output_size[0], 1, 1, bias=True)]
 
         self.cnn = nn.Sequential(*layers)
 
