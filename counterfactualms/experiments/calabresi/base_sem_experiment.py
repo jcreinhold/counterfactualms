@@ -104,6 +104,7 @@ class BaseVISEM(BaseSEM):
         self.use_spline = use_spline
         self.use_swish = use_swish
         self.use_stable = use_stable
+        self.pseudo3d = pseudo3d
         self.annealing_factor = 1.  # initialize here; will be changed during training
         self.n_levels = 0
 
@@ -256,22 +257,23 @@ class BaseVISEM(BaseSEM):
             self.posterior_flow_transforms = [self.posterior_flow_components]
 
     def _create_decoder(self, decoder):
+        c = 3 if self.pseudo3d else 1
         if self.decoder_type == 'fixed_var':
-            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
+            self.decoder = Conv2dIndepNormal(decoder, c, c)
             torch.nn.init.zeros_(self.decoder.logvar_head.weight)
             self.decoder.logvar_head.weight.requires_grad = False
             torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
             self.decoder.logvar_head.bias.requires_grad = False
 
         elif self.decoder_type == 'learned_var':
-            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
+            self.decoder = Conv2dIndepNormal(decoder, c, c)
             torch.nn.init.zeros_(self.decoder.logvar_head.weight)
             self.decoder.logvar_head.weight.requires_grad = False
             torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
             self.decoder.logvar_head.bias.requires_grad = True
 
         elif self.decoder_type == 'independent_var':
-            self.decoder = Conv2dIndepNormal(decoder, 1, 1)
+            self.decoder = Conv2dIndepNormal(decoder, c, c)
             torch.nn.init.zeros_(self.decoder.logvar_head.weight)
             self.decoder.logvar_head.weight.requires_grad = True
             torch.nn.init.normal_(self.decoder.logvar_head.bias, self.logstd_init, 1e-1)
