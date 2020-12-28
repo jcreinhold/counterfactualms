@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from skimage.io import imread
+from PIL import Image
 import torch
 from torch.utils.data.dataset import Dataset
 import torchvision as tv
@@ -54,10 +54,9 @@ class CalabresiDataset(Dataset):
         item = item.to_dict()
         item = self._prepare_item(item)
         img_path = item['filename']
-        img = imread(img_path, as_gray=True)
+        img = Image.open(img_path)
 
         transform_list = []
-        transform_list += [tv.transforms.ToPILImage()]
         if self.crop_type is not None:
             if self.crop_type == 'center':
                 transform_list += [tv.transforms.CenterCrop(self.crop_size)]
