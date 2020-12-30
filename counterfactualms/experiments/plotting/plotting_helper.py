@@ -156,7 +156,9 @@ def fmt_save(intervention):
 
 
 def prep_data(batch):
-    x = 255. * batch['image'].float().unsqueeze(0)
+    xg = 255. * batch['image'].float().unsqueeze(0)
+    channel_dim = xg.size(1)
+    x = xg[:,1:2,...] if channel_dim == 3 else xg
     age = batch['age'].unsqueeze(0).unsqueeze(0).float()
     sex = batch['sex'].unsqueeze(0).unsqueeze(0).float()
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
@@ -166,7 +168,7 @@ def prep_data(batch):
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     type = batch['type'].unsqueeze(0).unsqueeze(0).float()
     slice_number = batch['slice_number'].unsqueeze(0).unsqueeze(0).float()
-    return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
+    return {'x': x, 'xg': xg, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
             'brain_volume': brain_volume, 'lesion_volume': lesion_volume,
             'edss': edss, 'duration': duration, 'type': type, 'slice_number': slice_number}
 

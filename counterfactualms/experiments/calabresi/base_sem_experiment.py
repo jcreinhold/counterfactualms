@@ -257,7 +257,7 @@ class BaseVISEM(BaseSEM):
             self.posterior_flow_transforms = [self.posterior_flow_components]
 
     def _create_decoder(self, decoder):
-        c = 3 if self.pseudo3d else 1
+        c = 1
         if self.decoder_type == 'fixed_var':
             self.decoder = Conv2dIndepNormal(decoder, c, c)
             torch.nn.init.zeros_(self.decoder.logvar_head.weight)
@@ -381,7 +381,7 @@ class BaseVISEM(BaseSEM):
 
     @property
     def required_data(self):
-        return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
+        return {'x', 'xg', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
                 'edss', 'duration', 'slice_number'}
 
     def _check_observation(self, obs):
@@ -403,7 +403,7 @@ class BaseVISEM(BaseSEM):
         self._check_observation(obs)
         z_dist = pyro.poutine.trace(self.guide).get_trace(obs).nodes['z']['fn']
         batch_size = obs['x'].shape[0]
-        obs_ = {k: v for k, v in obs.items() if k != 'x'}
+        obs_ = {k: v for k, v in obs.items() if k not in ('x','xg')}
         recons = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
@@ -614,7 +614,7 @@ class SVIExperiment(BaseCovariateExperiment):
     def _theis_noise(self, obs):
         """ add noise to discrete variables per Theis 2016 """
         if self.training:
-            obs['x'] += (torch.rand_like(obs['x']) - 0.5)
+            obs['xg'] += (torch.rand_like(obs['xg']) - 0.5)
             obs['slice_number'] += (torch.rand_like(obs['slice_number']) - 0.5)
             obs['duration'] += torch.rand_like(obs['duration'] - 0.5)
             obs['duration'].clamp_(min=1e-4)
@@ -622,13 +622,18 @@ class SVIExperiment(BaseCovariateExperiment):
             obs['edss'].clamp_(min=1e-4)
         return obs
 
+    @property
+    def pseudo3d(self):
+        return self.pyro_model.pseudo3d
+
     def prep_batch(self, batch):
         x = 255. * batch['image'].float()  # multiply by 255 b/c preprocess tfms
-        out = dict(x=x)
+        out = dict(xg=x)  # the image that will be supplied to the guide
         for k in self.required_data:
             if k in batch:
                 out[k] = batch[k].unsqueeze(1).float()
         out = self._theis_noise(out)
+        out['x'] = x[:,1:2,...] if self.pseudo3d else x  # target image of model
         return out
 
     def _steps_per_epoch(self):

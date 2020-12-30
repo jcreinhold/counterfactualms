@@ -380,12 +380,10 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     @property
     def required_data(self):
-        return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
-                'edss', 'duration', 'slice_number'}
+        return self.pyro_model.required_data
 
     def _check_observation(self, obs):
-        keys = obs.keys()
-        assert self.required_data == set(keys), f'Incompatible observation: {tuple(keys)}'
+        self.pyro_model._check_observation(obs)
 
     def build_counterfactual(self, tag, obs, conditions, absolute=None, kde=False):
         self._check_observation(obs)
@@ -416,6 +414,14 @@ class BaseCovariateExperiment(pl.LightningModule):
         self.log_img_grid(tag, torch.cat(imgs, 0))
         if kde:
             self.log_kdes(f'{tag}_sampled', sampled_kdes, save_img=True)
+
+    def build_latent_imgs(self, obs):
+        if self.pyro_model.n_levels > 0:
+            guide_trace = pyro.poutine.trace(self.pyro_model.guide).get_trace(obs)
+            for i, j in enumerate(self.pyro_model.hierarchical_layers):
+                if j != self.pyro_model.last_layer:
+                    imgs = guide_trace.nodes[f'z{i}']['value']
+                    self.log_img_grid(f'z{i}', imgs[:,0:1,...])
 
     def sample_images(self):
         with torch.no_grad():
@@ -452,6 +458,8 @@ class BaseCovariateExperiment(pl.LightningModule):
 
             if hasattr(self.pyro_model, 'reconstruct'):
                 self.build_reconstruction(obs_batch)
+
+            self.build_latent_imgs(obs_batch)
 
             conditions = {
                 '20': {'age': torch.zeros_like(obs_batch['age']) + 20},
