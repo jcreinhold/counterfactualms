@@ -193,14 +193,21 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
         torch.cuda.empty_cache()
 
     for i, intervention in enumerate(interventions):
-        x = imgs[i]
-        x_test = orig_data['x']
+        x = imgs[i].squeeze()
+        x_test = orig_data['x'].squeeze()
         diff = (x - x_test).squeeze()
         if not normalise_all:
             lim = diff.abs().max()
-        ax[0, i].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, **imshow_kwargs)
+        if x.ndim == 3:
+            if x.shape[0] == 3:
+                x = x[1]
+                x_test = x_test[1]
+                diff = diff[1]
+            else:
+                raise ValueError(f'Invalid channel size: {x.shape[0]}.')
+        ax[0, i].imshow(np.rot90(x_test, n_rot90), img_cm, **imshow_kwargs)
         ax[0, i].set_title(fmt_intervention(intervention))
-        ax[1, i].imshow(np.rot90(x.squeeze(), n_rot90), img_cm, **imshow_kwargs)
+        ax[1, i].imshow(np.rot90(x, n_rot90), img_cm, **imshow_kwargs)
         ax[2, i].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
         for axi in ax[:, i]:
             axi.axis('off')
@@ -238,13 +245,21 @@ def interactive_plot(model_name):
         cond = {k: torch.tensor([[v]]).to(device) for k, v in intervention.items()}
         counterfactual = loaded_models[model_name].counterfactual(og, cond, num_samples)
         counterfactual = {k: v.detach().cpu() for k, v in counterfactual.items()}
-        x = counterfactual['x']
+        x = counterfactual['x'].squeeze()
+        x_test = x_test.squeeze()
         diff = (x - x_test).squeeze()
+        if x.ndim == 3:
+            if x.shape[0] == 3:
+                x = x[1]
+                x_test = x_test[1]
+                diff = diff[1]
+            else:
+                raise ValueError(f'Invalid channel size: {x.shape[0]}.')
         lim = diff.abs().max()
         ax[1].set_title('Original')
-        ax[1].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, **imshow_kwargs)
+        ax[1].imshow(np.rot90(x_test, n_rot90), img_cm, **imshow_kwargs)
         ax[2].set_title(fmt_intervention(intervention))
-        ax[2].imshow(np.rot90(x.squeeze(), n_rot90), img_cm, **imshow_kwargs)
+        ax[2].imshow(np.rot90(x, n_rot90), img_cm, **imshow_kwargs)
         ax[3].set_title('Difference')
         im = ax[3].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
         plt.colorbar(im)
