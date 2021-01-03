@@ -637,7 +637,7 @@ class SVIExperiment(BaseCovariateExperiment):
             if k in batch:
                 out[k] = batch[k].unsqueeze(1).float()
         out = self._theis_noise(out)
-        out['x'] = x[:,1:2,...] if self.pseudo3d else x  # target image of model
+        out['x'] = out['xg'][:,1:2,...] if self.pseudo3d else out['xg']  # target image of model
         return out
 
     def _steps_per_epoch(self):
