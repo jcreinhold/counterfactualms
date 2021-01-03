@@ -80,15 +80,18 @@ class BaseVISEM(BaseSEM):
                  decoder_type:str='fixed_var', decoder_cov_rank:int=10, img_shape:Tuple[int]=(128,128),
                  use_nvae=False, use_weight_norm=False, use_spectral_norm=False, laplace_likelihood=False,
                  eps=0.1, n_prior_flows=3, n_posterior_flows=3, use_autoregressive=False, use_swish=False,
-                 use_spline=False, use_stable=False, pseudo3d=False, **kwargs):
+                 use_spline=False, use_stable=False, pseudo3d=False, head_filters=(16,16), **kwargs):
         super().__init__(**kwargs)
-        self.img_shape = ((3,) if pseudo3d else (1,)) + tuple(img_shape)
+        self.encoder_shape = ((3,) if pseudo3d else (1,)) + tuple(img_shape)
+        self.decoder_shape = (head_filters[0],) + tuple(img_shape)
+        self.img_shape = (1,) + tuple(img_shape)
         self.latent_dim = latent_dim
         self.prior_components = prior_components
         self.posterior_components = posterior_components
         self.logstd_init = logstd_init
         self.enc_filters = enc_filters
         self.dec_filters = dec_filters
+        self.head_filters = head_filters
         self.num_convolutions = num_convolutions
         self.use_upconv = use_upconv
         self.decoder_type = decoder_type
@@ -113,15 +116,15 @@ class BaseVISEM(BaseSEM):
             decoder = NDecoder(
                 num_convolutions=self.num_convolutions, filters=self.dec_filters,
                 latent_dim=self.latent_dim + self.context_dim,
-                output_size=self.img_shape
+                output_size=self.decoder_shape
             )
         else:
             decoder = Decoder(
                 num_convolutions=self.num_convolutions, filters=self.dec_filters,
                 latent_dim=self.latent_dim + self.context_dim, upconv=self.use_upconv,
-                output_size=self.img_shape,
+                output_size=self.decoder_shape,
                 use_weight_norm=self.use_weight_norm,
-                use_spectral_norm=self.use_spectral_norm
+                use_spectral_norm=self.use_spectral_norm,
             )
 
         self._create_decoder(decoder)
@@ -132,14 +135,14 @@ class BaseVISEM(BaseSEM):
                 num_convolutions=self.num_convolutions,
                 filters=self.enc_filters,
                 latent_dim=self.latent_dim,
-                input_size=self.img_shape
+                input_size=self.encoder_shape
             )
         else:
             self.encoder = Encoder(
                 num_convolutions=self.num_convolutions,
                 filters=self.enc_filters,
                 latent_dim=self.latent_dim,
-                input_size=self.img_shape,
+                input_size=self.encoder_shape,
                 use_weight_norm=self.use_weight_norm,
                 use_spectral_norm = self.use_spectral_norm
             )
@@ -171,14 +174,14 @@ class BaseVISEM(BaseSEM):
         self.register_buffer('slice_number_min', torch.zeros([1, ], requires_grad=False))
         self.register_buffer('slice_number_max', 241.*torch.ones([1, ], requires_grad=False)+1.)
 
-        for k in self.required_data - {'sex', 'x', 'slice_number'}:
+        for k in self.required_data - {'sex', 'x', 'xg', 'slice_number'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
             self.register_buffer(f'{k}_base_scale', torch.ones([1, ], requires_grad=False))
 
         self.register_buffer('x_base_loc', torch.zeros(self.img_shape, requires_grad=False))
         self.register_buffer('x_base_scale', torch.ones(self.img_shape, requires_grad=False))
 
-        for k in self.required_data - {'sex', 'x', 'slice_number'}:
+        for k in self.required_data - {'sex', 'x', 'xg', 'slice_number'}:
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
@@ -257,35 +260,35 @@ class BaseVISEM(BaseSEM):
             self.posterior_flow_transforms = [self.posterior_flow_components]
 
     def _create_decoder(self, decoder):
-        c = 1
+        co = 1
         if self.decoder_type == 'fixed_var':
-            self.decoder = Conv2dIndepNormal(decoder, c, c)
-            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
-            self.decoder.logvar_head.weight.requires_grad = False
-            torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
-            self.decoder.logvar_head.bias.requires_grad = False
+            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co)
+            torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
+            self.decoder.logvar_head[-1].weight.requires_grad = False
+            torch.nn.init.constant_(self.decoder.logvar_head[-1].bias, self.logstd_init)
+            self.decoder.logvar_head[-1].bias.requires_grad = False
 
         elif self.decoder_type == 'learned_var':
-            self.decoder = Conv2dIndepNormal(decoder, c, c)
-            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
-            self.decoder.logvar_head.weight.requires_grad = False
-            torch.nn.init.constant_(self.decoder.logvar_head.bias, self.logstd_init)
-            self.decoder.logvar_head.bias.requires_grad = True
+            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co)
+            torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
+            self.decoder.logvar_head[-1].weight.requires_grad = False
+            torch.nn.init.constant_(self.decoder.logvar_head[-1].bias, self.logstd_init)
+            self.decoder.logvar_head[-1].bias.requires_grad = True
 
         elif self.decoder_type == 'independent_var':
-            self.decoder = Conv2dIndepNormal(decoder, c, c)
-            torch.nn.init.zeros_(self.decoder.logvar_head.weight)
-            self.decoder.logvar_head.weight.requires_grad = True
-            torch.nn.init.normal_(self.decoder.logvar_head.bias, self.logstd_init, 1e-1)
-            self.decoder.logvar_head.bias.requires_grad = True
+            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co)
+            torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
+            self.decoder.logvar_head[-1].weight.requires_grad = True
+            torch.nn.init.normal_(self.decoder.logvar_head[-1].bias, self.logstd_init, 1e-1)
+            self.decoder.logvar_head[-1].bias.requires_grad = True
 
         elif self.decoder_type == 'multivariate_gaussian':
             seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
-            self.decoder = DeepMultivariateNormal(seq, np.prod(self.img_shape), np.prod(self.img_shape))
+            self.decoder = DeepMultivariateNormal(seq, np.prod(self.decoder_shape), np.prod(self.img_shape))
 
         elif self.decoder_type == 'sharedvar_multivariate_gaussian':
             seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
-            self.decoder = DeepMultivariateNormal(seq, np.prod(self.img_shape), np.prod(self.img_shape))
+            self.decoder = DeepMultivariateNormal(seq, np.prod(self.decoder_shape), np.prod(self.img_shape))
             torch.nn.init.zeros_(self.decoder.logdiag_head.weight)
             self.decoder.logdiag_head.weight.requires_grad = False
             torch.nn.init.zeros_(self.decoder.lower_head.weight)
@@ -296,13 +299,13 @@ class BaseVISEM(BaseSEM):
         elif self.decoder_type == 'lowrank_multivariate_gaussian':
             seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
             self.decoder = DeepLowRankMultivariateNormal(
-                seq, np.prod(self.img_shape), np.prod(self.img_shape), self.decoder_cov_rank
+                seq, np.prod(self.decoder_shape), np.prod(self.img_shape), self.decoder_cov_rank
             )
 
         elif self.decoder_type == 'sharedvar_lowrank_multivariate_gaussian':
             seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
             self.decoder = DeepLowRankMultivariateNormal(
-                seq, np.prod(self.img_shape), np.prod(self.img_shape), self.decoder_cov_rank
+                seq, np.prod(self.decoder_shape), np.prod(self.img_shape), self.decoder_cov_rank
             )
             torch.nn.init.zeros_(self.decoder.logdiag_head.weight)
             self.decoder.logdiag_head.weight.requires_grad = False
@@ -414,9 +417,9 @@ class BaseVISEM(BaseSEM):
         return torch.stack(recons).mean(0)
 
     def _cf_dict(self, counterfactuals):
-        out = {k: [] for k in self.required_data}
+        out = {k: [] for k in (self.required_data - {'xg'})}
         for cf in counterfactuals:
-            for k in self.required_data:
+            for k in (self.required_data - {'xg'}):
                 out[k].append(cf[k])
         out = {k: torch.stack(v).mean(0) for k, v in out.items()}
         return out
@@ -455,6 +458,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
         parser.add_argument('--enc-filters', default=[16,32,64,128,256], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
         parser.add_argument('--dec-filters', default=[256,128,64,32,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
+        parser.add_argument('--head-filters', default=[16,16], nargs='+', type=int, help="number of filters in each (mean/logvar) head (default: %(default)s)")
         parser.add_argument('--num-convolutions', default=3, type=int, help="number of convolutions in each layer (default: %(default)s)")
         parser.add_argument('--use-upconv', default=False, action='store_true', help="use upsample->conv instead of transpose conv (default: %(default)s)")
         parser.add_argument('--use-nvae', default=False, action='store_true', help="use nvae instead of standard vae (default: %(default)s)")
@@ -597,7 +601,7 @@ class SVIExperiment(BaseCovariateExperiment):
         metrics = {}
         model = self.svi.loss_class.trace_storage['model']
         guide = self.svi.loss_class.trace_storage['guide']
-        for k in self.required_data:
+        for k in (self.required_data - {'xg'}):
             metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
         if self.pyro_model.n_levels > 0:
             metrics['log p(z) - log q(z)'] = 0.

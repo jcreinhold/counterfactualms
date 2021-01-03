@@ -26,12 +26,12 @@ class BaseHierarchicalVISEM(BaseVISEM):
         super().__init__(*args, **kwargs)
         self.encoder = HierarchicalEncoder(num_convolutions=self.num_convolutions, filters=self.enc_filters,
                                            latent_dim=self.latent_dim, div_factor=hierarchical_div,
-                                           input_size=self.img_shape, use_weight_norm=self.use_weight_norm,
+                                           input_size=self.encoder_shape, use_weight_norm=self.use_weight_norm,
                                            use_spectral_norm=self.use_spectral_norm,
                                            hierarchical_layers=self.hierarchical_layers)
         decoder = HierarchicalDecoder(num_convolutions=self.num_convolutions, filters=self.dec_filters,
                                       latent_dim=self.latent_dim+self.context_dim, div_factor=hierarchical_div,
-                                      output_size=self.img_shape, use_weight_norm=self.use_weight_norm,
+                                      output_size=self.decoder_shape, use_weight_norm=self.use_weight_norm,
                                       use_spectral_norm=self.use_spectral_norm,
                                       hierarchical_layers=self.hierarchical_layers,
                                       context_dim=self.context_dim)

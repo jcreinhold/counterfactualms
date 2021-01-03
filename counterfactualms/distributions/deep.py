@@ -6,6 +6,7 @@ from pyro.distributions import (
 )
 from torch import nn
 
+from counterfactualms.arch.layers import Conv2d
 from counterfactualms.distributions.params import MixtureParams
 
 
@@ -43,12 +44,27 @@ class DeepIndepNormal(_DeepIndepNormal):
         )
 
 
+def _conv_layer(ci, co, use_weight_norm=False, use_spectral_norm=False):
+    return [Conv2d(ci, co, 3, 1, 1, bias=False,
+                   use_weight_norm=use_weight_norm,
+                   use_spectral_norm=use_spectral_norm),
+            nn.BatchNorm2d(co, momentum=0.05),
+            nn.LeakyReLU(.1, inplace=True)]
+
+
+def _create_head(head_filters, out_channels:int=1, **kwargs):
+    layers = [_conv_layer(hi, ho, **kwargs) for hi, ho in zip(head_filters, head_filters[1:])]
+    layers = [h for l in layers for h in l]
+    layers.append(nn.Conv2d(head_filters[-1], out_channels, 1))
+    return nn.Sequential(*layers)
+
+
 class Conv2dIndepNormal(_DeepIndepNormal):
-    def __init__(self, backbone: nn.Module, hidden_channels: int, out_channels: int = 1):
+    def __init__(self, backbone:nn.Module, hidden_channels:int, out_channels:int = 1, **kwargs):
         super().__init__(
             backbone=backbone,
-            mean_head=nn.Conv2d(hidden_channels, out_channels=out_channels, kernel_size=1),
-            logvar_head=nn.Conv2d(hidden_channels, out_channels=out_channels, kernel_size=1)
+            mean_head=_create_head(hidden_channels, out_channels, **kwargs),
+            logvar_head=_create_head(hidden_channels, out_channels, **kwargs)
         )
 
 

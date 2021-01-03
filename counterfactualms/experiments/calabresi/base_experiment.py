@@ -421,7 +421,7 @@ class BaseCovariateExperiment(pl.LightningModule):
             for i, j in enumerate(self.pyro_model.hierarchical_layers):
                 if j != self.pyro_model.last_layer:
                     imgs = guide_trace.nodes[f'z{i}']['value']
-                    self.log_img_grid(f'z{i}', imgs[:,0:1,...])
+                    self.log_img_grid(f'latent/z{i}', imgs[:,0:1,...])
 
     def sample_images(self):
         with torch.no_grad():
