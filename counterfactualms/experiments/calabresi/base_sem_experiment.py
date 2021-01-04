@@ -260,7 +260,7 @@ class BaseVISEM(BaseSEM):
             self.posterior_flow_transforms = [self.posterior_flow_components]
 
     def _create_decoder(self, decoder):
-        co = 1
+        co = 3 if self.pseudo3d else 1
         if self.decoder_type == 'fixed_var':
             self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
                 use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
