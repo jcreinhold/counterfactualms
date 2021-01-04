@@ -174,14 +174,14 @@ class BaseVISEM(BaseSEM):
         self.register_buffer('slice_number_min', torch.zeros([1, ], requires_grad=False))
         self.register_buffer('slice_number_max', 241.*torch.ones([1, ], requires_grad=False)+1.)
 
-        for k in self.required_data - {'sex', 'x', 'xg', 'slice_number'}:
+        for k in self.required_data - {'sex', 'x', 'slice_number'}:
             self.register_buffer(f'{k}_base_loc', torch.zeros([1, ], requires_grad=False))
             self.register_buffer(f'{k}_base_scale', torch.ones([1, ], requires_grad=False))
 
         self.register_buffer('x_base_loc', torch.zeros(self.img_shape, requires_grad=False))
         self.register_buffer('x_base_scale', torch.ones(self.img_shape, requires_grad=False))
 
-        for k in self.required_data - {'sex', 'x', 'xg', 'slice_number'}:
+        for k in self.required_data - {'sex', 'x', 'slice_number'}:
             self.register_buffer(f'{k}_flow_lognorm_loc', torch.zeros([], requires_grad=False))
             self.register_buffer(f'{k}_flow_lognorm_scale', torch.ones([], requires_grad=False))
 
@@ -262,21 +262,24 @@ class BaseVISEM(BaseSEM):
     def _create_decoder(self, decoder):
         co = 1
         if self.decoder_type == 'fixed_var':
-            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co)
+            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
+                use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
             torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
             self.decoder.logvar_head[-1].weight.requires_grad = False
             torch.nn.init.constant_(self.decoder.logvar_head[-1].bias, self.logstd_init)
             self.decoder.logvar_head[-1].bias.requires_grad = False
 
         elif self.decoder_type == 'learned_var':
-            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co)
+            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
+                use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
             torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
             self.decoder.logvar_head[-1].weight.requires_grad = False
             torch.nn.init.constant_(self.decoder.logvar_head[-1].bias, self.logstd_init)
             self.decoder.logvar_head[-1].bias.requires_grad = True
 
         elif self.decoder_type == 'independent_var':
-            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co)
+            self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
+                use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
             torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
             self.decoder.logvar_head[-1].weight.requires_grad = True
             torch.nn.init.normal_(self.decoder.logvar_head[-1].bias, self.logstd_init, 1e-1)
@@ -384,7 +387,7 @@ class BaseVISEM(BaseSEM):
 
     @property
     def required_data(self):
-        return {'x', 'xg', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
+        return {'x', 'sex', 'age', 'ventricle_volume', 'brain_volume', 'lesion_volume',
                 'edss', 'duration', 'slice_number'}
 
     def _check_observation(self, obs):
@@ -406,7 +409,7 @@ class BaseVISEM(BaseSEM):
         self._check_observation(obs)
         z_dist = pyro.poutine.trace(self.guide).get_trace(obs).nodes['z']['fn']
         batch_size = obs['x'].shape[0]
-        obs_ = {k: v for k, v in obs.items() if k not in ('x','xg')}
+        obs_ = {k: v for k, v in obs.items() if k != 'x'}
         recons = []
         for _ in range(num_particles):
             z = pyro.sample('z', z_dist)
@@ -417,9 +420,9 @@ class BaseVISEM(BaseSEM):
         return torch.stack(recons).mean(0)
 
     def _cf_dict(self, counterfactuals):
-        out = {k: [] for k in (self.required_data - {'xg'})}
+        out = {k: [] for k in self.required_data}
         for cf in counterfactuals:
-            for k in (self.required_data - {'xg'}):
+            for k in self.required_data:
                 out[k].append(cf[k])
         out = {k: torch.stack(v).mean(0) for k, v in out.items()}
         return out
@@ -458,7 +461,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
         parser.add_argument('--enc-filters', default=[16,32,64,128,256], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
         parser.add_argument('--dec-filters', default=[256,128,64,32,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
-        parser.add_argument('--head-filters', default=[16,16], nargs='+', type=int, help="number of filters in each (mean/logvar) head (default: %(default)s)")
+        parser.add_argument('--head-filters', default=[16], nargs='+', type=int, help="number of filters in each (mean/logvar) head (default: %(default)s)")
         parser.add_argument('--num-convolutions', default=3, type=int, help="number of convolutions in each layer (default: %(default)s)")
         parser.add_argument('--use-upconv', default=False, action='store_true', help="use upsample->conv instead of transpose conv (default: %(default)s)")
         parser.add_argument('--use-nvae', default=False, action='store_true', help="use nvae instead of standard vae (default: %(default)s)")
@@ -601,7 +604,7 @@ class SVIExperiment(BaseCovariateExperiment):
         metrics = {}
         model = self.svi.loss_class.trace_storage['model']
         guide = self.svi.loss_class.trace_storage['guide']
-        for k in (self.required_data - {'xg'}):
+        for k in self.required_data:
             metrics[f'log p({k})'] = model.nodes[k]['log_prob'].mean()
         if self.pyro_model.n_levels > 0:
             metrics['log p(z) - log q(z)'] = 0.
@@ -618,7 +621,7 @@ class SVIExperiment(BaseCovariateExperiment):
     def _theis_noise(self, obs):
         """ add noise to discrete variables per Theis 2016 """
         if self.training:
-            obs['xg'] += (torch.rand_like(obs['xg']) - 0.5)
+            obs['x'] += (torch.rand_like(obs['x']) - 0.5)
             obs['slice_number'] += (torch.rand_like(obs['slice_number']) - 0.5)
             obs['duration'] += torch.rand_like(obs['duration'] - 0.5)
             obs['duration'].clamp_(min=1e-4)
@@ -632,12 +635,11 @@ class SVIExperiment(BaseCovariateExperiment):
 
     def prep_batch(self, batch):
         x = 255. * batch['image'].float()  # multiply by 255 b/c preprocess tfms
-        out = dict(xg=x)  # the image that will be supplied to the guide
+        out = dict(x=x)
         for k in self.required_data:
             if k in batch:
                 out[k] = batch[k].unsqueeze(1).float()
         out = self._theis_noise(out)
-        out['x'] = out['xg'][:,1:2,...] if self.pseudo3d else out['xg']  # target image of model
         return out
 
     def _steps_per_epoch(self):

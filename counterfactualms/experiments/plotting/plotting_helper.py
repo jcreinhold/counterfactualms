@@ -98,7 +98,7 @@ def get_best_model(model_paths):
     return model_paths[idx]
 
 
-def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True):
+def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True, strict=True):
     """ run this first with paths to models corresponding to experiments """
     ckpt = torch.load(model_path, map_location=torch.device('cpu'))
     hparams = ckpt['hyper_parameters']
@@ -115,7 +115,7 @@ def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), 
         new_key = key.replace('pyro_model.', '')
         new_state_dict[new_key] = value
     loaded_model = model_class(**model_params)
-    loaded_model.load_state_dict(new_state_dict)
+    loaded_model.load_state_dict(new_state_dict, strict=strict)
     global device
     device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
     for p in loaded_model._buffers.keys():
@@ -156,9 +156,7 @@ def fmt_save(intervention):
 
 
 def prep_data(batch):
-    xg = 255. * batch['image'].float().unsqueeze(0)
-    channel_dim = xg.size(1)
-    x = xg[:,1:2,...] if channel_dim == 3 else xg
+    x = 255. * batch['image'].float().unsqueeze(0)
     age = batch['age'].unsqueeze(0).unsqueeze(0).float()
     sex = batch['sex'].unsqueeze(0).unsqueeze(0).float()
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
@@ -168,7 +166,7 @@ def prep_data(batch):
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     type = batch['type'].unsqueeze(0).unsqueeze(0).float()
     slice_number = batch['slice_number'].unsqueeze(0).unsqueeze(0).float()
-    return {'x': x, 'xg': xg, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
+    return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
             'brain_volume': brain_volume, 'lesion_volume': lesion_volume,
             'edss': edss, 'duration': duration, 'type': type, 'slice_number': slice_number}
 
