@@ -280,7 +280,7 @@ class BaseVISEM(BaseSEM):
         elif self.decoder_type == 'independent_var':
             self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
                 use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
-            torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
+            torch.nn.init.kaiming_normal_(self.decoder.logvar_head[-1].weight, nonlinearity='linear')
             self.decoder.logvar_head[-1].weight.requires_grad = True
             torch.nn.init.normal_(self.decoder.logvar_head[-1].bias, self.logstd_init, 1e-1)
             self.decoder.logvar_head[-1].bias.requires_grad = True
