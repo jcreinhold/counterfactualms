@@ -460,7 +460,6 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--prior-components', default=1, type=int, help="number of mixture components for prior (default: %(default)s)")
         parser.add_argument('--posterior-components', default=1, type=int, help="number of mixture components for posterior (default: %(default)s)")
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
-        parser.add_argument('--logstd-weight-decay', default=1., type=float, help="weight decay for logstd in decoder (default: %(default)s)")
         parser.add_argument('--enc-filters', default=[16,32,64,128,256], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
         parser.add_argument('--dec-filters', default=[256,128,64,32,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
         parser.add_argument('--head-filters', default=[16], nargs='+', type=int, help="number of filters in each (mean/logstd) head (default: %(default)s)")

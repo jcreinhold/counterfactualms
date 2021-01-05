@@ -517,6 +517,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         parser.add_argument('--lr', default=1e-3, type=float, help="lr of deep part (default: %(default)s)")
         parser.add_argument('--pgm-lr', default=5e-3, type=float, help="lr of pgm (default: %(default)s)")
         parser.add_argument('--weight-decay', default=0., type=float, help="weight decay for adam (default: %(default)s)")
+        parser.add_argument('--logstd-weight-decay', default=1., type=float, help="weight decay for logstd in decoder (default: %(default)s)")
         parser.add_argument('--betas', default=(0.9,0.999), type=float, nargs=2, help="betas for adam (default: %(default)s)")
         parser.add_argument('--clip-norm', default=100., type=float, help="clip norm for grad for adam (default: %(default)s)")
         parser.add_argument('--pgm-clip-norm', default=10., type=float, help="clip norm for grad for adam in pgm (default: %(default)s)")
