@@ -1,3 +1,4 @@
+from typing import List
 import torch
 from pyro.distributions import (
     Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
@@ -16,21 +17,22 @@ class DeepConditional(nn.Module):
 
 
 class _DeepIndepNormal(DeepConditional):
-    def __init__(self, backbone: nn.Module, mean_head: nn.Module, logvar_head: nn.Module):
+    def __init__(self, backbone:nn.Module, mean_head:nn.Module, logstd_head:nn.Module, logstd_ref:float=0.):
         super().__init__()
         self.backbone = backbone
         self.mean_head = mean_head
-        self.logvar_head = logvar_head
+        self.logstd_head = logstd_head
+        self.logstd_ref = logstd_ref
 
     def forward(self, x, ctx=None):
         h = self.backbone(x) if ctx is None else self.backbone(x, ctx)
         mean = self.mean_head(h)
-        logvar = self.logvar_head(h)
-        return mean, logvar
+        logstd = self.logstd_head(h)
+        return mean, logstd
 
     def predict(self, x, ctx=None) -> Independent:
-        mean, logvar = self(x, ctx)
-        std = (.5 * logvar).exp() + 1e-5
+        mean, logstd = self(x, ctx)
+        std = (logstd - self.logstd_ref).exp() + 1e-5
         event_ndim = len(mean.shape[1:])  # keep only batch dimension
         return Normal(mean, std).to_event(event_ndim)
 
@@ -40,7 +42,7 @@ class DeepIndepNormal(_DeepIndepNormal):
         super().__init__(
             backbone=backbone,
             mean_head=nn.Linear(hidden_dim, out_dim),
-            logvar_head=nn.Linear(hidden_dim, out_dim)
+            logstd_head=nn.Linear(hidden_dim, out_dim)
         )
 
 
@@ -60,11 +62,13 @@ def _create_head(head_filters, out_channels:int=1, **kwargs):
 
 
 class Conv2dIndepNormal(_DeepIndepNormal):
-    def __init__(self, backbone:nn.Module, hidden_channels:int, out_channels:int = 1, **kwargs):
+    def __init__(self, backbone:nn.Module, hidden_channels:List[int],
+                 out_channels:int=1, logstd_ref:float=-5., **kwargs):
         super().__init__(
             backbone=backbone,
             mean_head=_create_head(hidden_channels, out_channels, **kwargs),
-            logvar_head=_create_head(hidden_channels, out_channels, **kwargs)
+            logstd_head=_create_head(hidden_channels, out_channels, **kwargs),
+            logstd_ref=logstd_ref
         )
 
 
@@ -73,15 +77,15 @@ class Conv3dIndepNormal(_DeepIndepNormal):
         super().__init__(
             backbone=backbone,
             mean_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1),
-            logvar_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1)
+            logstd_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1)
         )
 
 class _DeepIndepMixtureNormal(DeepConditional):
-    def __init__(self, backbone:nn.Module, mean_head:nn.ModuleList, logvar_head:nn.Module, component_head:nn.Module):
+    def __init__(self, backbone:nn.Module, mean_head:nn.ModuleList, logstd_head:nn.Module, component_head:nn.Module):
         super().__init__()
         self.backbone = backbone
         self.mean_head = mean_head
-        self.logvar_head = logvar_head
+        self.logstd_head = logstd_head
         self.component_head = component_head
         def _init_normal(m):
             if type(m) == nn.Linear:
@@ -92,13 +96,13 @@ class _DeepIndepMixtureNormal(DeepConditional):
     def forward(self, x):
         h = self.backbone(x)
         mean = torch.stack([mh(h) for mh in self.mean_head],1)
-        logvar = self.logvar_head(h)
+        logstd = self.logstd_head(h)
         component = self.component_head(h)
-        return mean, logvar, component
+        return mean, logstd, component
 
     def predict(self, x) -> Independent:
-        mean, logvar, component = self(x)
-        std = (0.5 * logvar).exp() + 1e-5
+        mean, logstd, component = self(x)
+        std = logstd.exp() + 1e-5
         component = torch.log_softmax(component, dim=-1)
         event_ndim = 0
         return MixtureOfDiagNormalsSharedCovariance(mean, std, component).to_event(event_ndim)
@@ -109,7 +113,7 @@ class DeepIndepMixtureNormal(_DeepIndepMixtureNormal):
         super().__init__(
             backbone=backbone,
             mean_head=nn.ModuleList([nn.Linear(hidden_dim, out_dim) for _ in range(n_comp)]),
-            logvar_head=nn.Linear(hidden_dim, out_dim),
+            logstd_head=nn.Linear(hidden_dim, out_dim),
             component_head=nn.Linear(hidden_dim, n_comp)
         )
 

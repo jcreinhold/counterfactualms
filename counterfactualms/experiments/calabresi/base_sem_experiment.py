@@ -264,26 +264,27 @@ class BaseVISEM(BaseSEM):
         if self.decoder_type == 'fixed_var':
             self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
                 use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
-            torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
-            self.decoder.logvar_head[-1].weight.requires_grad = False
-            torch.nn.init.constant_(self.decoder.logvar_head[-1].bias, self.logstd_init)
-            self.decoder.logvar_head[-1].bias.requires_grad = False
+            torch.nn.init.zeros_(self.decoder.logstd_head[-1].weight)
+            self.decoder.logstd_head[-1].weight.requires_grad = False
+            torch.nn.init.constant_(self.decoder.logstd_head[-1].bias, self.logstd_init)
+            self.decoder.logstd_head[-1].bias.requires_grad = False
 
         elif self.decoder_type == 'learned_var':
             self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
                 use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
-            torch.nn.init.zeros_(self.decoder.logvar_head[-1].weight)
-            self.decoder.logvar_head[-1].weight.requires_grad = False
-            torch.nn.init.constant_(self.decoder.logvar_head[-1].bias, self.logstd_init)
-            self.decoder.logvar_head[-1].bias.requires_grad = True
+            torch.nn.init.zeros_(self.decoder.logstd_head[-1].weight)
+            self.decoder.logstd_head[-1].weight.requires_grad = False
+            torch.nn.init.constant_(self.decoder.logstd_head[-1].bias, self.logstd_init)
+            self.decoder.logstd_head[-1].bias.requires_grad = True
 
         elif self.decoder_type == 'independent_var':
             self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
-                use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
-            torch.nn.init.kaiming_normal_(self.decoder.logvar_head[-1].weight, nonlinearity='linear')
-            self.decoder.logvar_head[-1].weight.requires_grad = True
-            torch.nn.init.normal_(self.decoder.logvar_head[-1].bias, self.logstd_init, 1e-1)
-            self.decoder.logvar_head[-1].bias.requires_grad = True
+                use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm,
+                logstd_ref=self.logstd_init)
+            torch.nn.init.kaiming_normal_(self.decoder.logstd_head[-1].weight, nonlinearity='linear')
+            self.decoder.logstd_head[-1].weight.requires_grad = True
+            torch.nn.init.zeros_(self.decoder.logstd_head[-1].bias)
+            self.decoder.logstd_head[-1].bias.requires_grad = True
 
         elif self.decoder_type == 'multivariate_gaussian':
             seq = torch.nn.Sequential(decoder, Lambda(lambda x: x.view(x.shape[0], -1)))
@@ -459,9 +460,10 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--prior-components', default=1, type=int, help="number of mixture components for prior (default: %(default)s)")
         parser.add_argument('--posterior-components', default=1, type=int, help="number of mixture components for posterior (default: %(default)s)")
         parser.add_argument('--logstd-init', default=-5, type=float, help="init of logstd (default: %(default)s)")
+        parser.add_argument('--logstd-weight-decay', default=1., type=float, help="weight decay for logstd in decoder (default: %(default)s)")
         parser.add_argument('--enc-filters', default=[16,32,64,128,256], nargs='+', type=int, help="number of filters in each layer of encoder (default: %(default)s)")
         parser.add_argument('--dec-filters', default=[256,128,64,32,16], nargs='+', type=int, help="number of filters in each layer of decoder (default: %(default)s)")
-        parser.add_argument('--head-filters', default=[16], nargs='+', type=int, help="number of filters in each (mean/logvar) head (default: %(default)s)")
+        parser.add_argument('--head-filters', default=[16], nargs='+', type=int, help="number of filters in each (mean/logstd) head (default: %(default)s)")
         parser.add_argument('--num-convolutions', default=3, type=int, help="number of convolutions in each layer (default: %(default)s)")
         parser.add_argument('--use-upconv', default=False, action='store_true', help="use upsample->conv instead of transpose conv (default: %(default)s)")
         parser.add_argument('--use-nvae', default=False, action='store_true', help="use nvae instead of standard vae (default: %(default)s)")
@@ -511,6 +513,8 @@ class SVIExperiment(BaseCovariateExperiment):
                 elif 'sex_logits' in param_name:
                     params['lr'] = self.hparams.pgm_lr
                     params['weight_decay'] = 0.
+                elif 'decoder' in module_name and 'logstd_head' in param_name:
+                    params['weight_decay'] = self.hparams.logstd_weight_decay
                 else:
                     params['lr'] = self.hparams.lr
                 logger.info(f'building opt for {module_name} - {param_name} with p: {params}')
