@@ -32,7 +32,7 @@ class _DeepIndepNormal(DeepConditional):
 
     def predict(self, x, ctx=None) -> Independent:
         mean, logstd = self(x, ctx)
-        std = (logstd - self.logstd_ref).exp() + 1e-5
+        std = (logstd + self.logstd_ref).exp() + 1e-5
         event_ndim = len(mean.shape[1:])  # keep only batch dimension
         return Normal(mean, std).to_event(event_ndim)
 
