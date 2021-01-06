@@ -271,7 +271,8 @@ class BaseVISEM(BaseSEM):
 
         elif self.decoder_type == 'learned_var':
             self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
-                use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
+                use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm,
+                logstd_ref=self.logstd_init)
             torch.nn.init.zeros_(self.decoder.logstd_head[-1].weight)
             self.decoder.logstd_head[-1].weight.requires_grad = False
             torch.nn.init.constant_(self.decoder.logstd_head[-1].bias, self.logstd_init)
@@ -655,7 +656,7 @@ class SVIExperiment(BaseCovariateExperiment):
         not_in_sanity_check = self.hparams.annealing_epochs > 0
         in_annealing_epochs = self.current_epoch < self.hparams.annealing_epochs
         n_levels = max(self.pyro_model.n_levels, 1)
-        self.annealing_factor = [1. for _ in range(n_levels)]
+        self.pyro_model.annealing_factor = [1. for _ in range(n_levels)]
         for i in range(n_levels):
             if not_in_sanity_check and in_annealing_epochs and self.training:
                 min_af = self.hparams.min_annealing_factor[i]
@@ -663,10 +664,10 @@ class SVIExperiment(BaseCovariateExperiment):
                 self.pyro_model.annealing_factor[i] = min_af + (max_af - min_af) * \
                                    (float(batch_idx + self.current_epoch * steps_per_epoch + 1) /
                                     float(self.hparams.annealing_epochs * steps_per_epoch))
+                self.log(f'annealing_factor/af{i}', self.pyro_model.annealing_factor[i],
+                         on_step=False, on_epoch=True)
             else:
-                self.pyro_model.annealing_factor[i] = self.hparams.max_annealing_factor
-            self.log(f'annealing_factor/af{i}', self.pyro_model.annealing_factor[i],
-                     on_step=False, on_epoch=True)
+                self.pyro_model.annealing_factor[i] = self.hparams.max_annealing_factor[i]
 
     def training_step(self, batch, batch_idx):
         self._set_annealing_factor(batch_idx)
