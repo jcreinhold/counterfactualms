@@ -108,7 +108,7 @@ class BaseVISEM(BaseSEM):
         self.use_swish = use_swish
         self.use_stable = use_stable
         self.pseudo3d = pseudo3d
-        self.annealing_factor = 1.  # initialize here; will be changed during training
+        self.annealing_factor = [1.]  # initialize here; will be changed during training
         self.n_levels = 0
 
         # decoder parts
@@ -654,14 +654,19 @@ class SVIExperiment(BaseCovariateExperiment):
             batch_idx = steps_per_epoch
         not_in_sanity_check = self.hparams.annealing_epochs > 0
         in_annealing_epochs = self.current_epoch < self.hparams.annealing_epochs
-        if not_in_sanity_check and in_annealing_epochs and self.training:
-            min_af = self.hparams.min_annealing_factor
-            max_af = self.hparams.max_annealing_factor
-            self.pyro_model.annealing_factor = min_af + (max_af - min_af) * \
-                               (float(batch_idx + self.current_epoch * steps_per_epoch + 1) /
-                                float(self.hparams.annealing_epochs * steps_per_epoch))
-        else:
-            self.pyro_model.annealing_factor = self.hparams.max_annealing_factor
+        n_levels = max(self.pyro_model.n_levels, 1)
+        self.annealing_factor = [1. for _ in range(n_levels)]
+        for i in range(n_levels):
+            if not_in_sanity_check and in_annealing_epochs and self.training:
+                min_af = self.hparams.min_annealing_factor[i]
+                max_af = self.hparams.max_annealing_factor[i]
+                self.pyro_model.annealing_factor[i] = min_af + (max_af - min_af) * \
+                                   (float(batch_idx + self.current_epoch * steps_per_epoch + 1) /
+                                    float(self.hparams.annealing_epochs * steps_per_epoch))
+            else:
+                self.pyro_model.annealing_factor[i] = self.hparams.max_annealing_factor
+            self.log(f'annealing_factor/af{i}', self.pyro_model.annealing_factor[i],
+                     on_step=False, on_epoch=True)
 
     def training_step(self, batch, batch_idx):
         self._set_annealing_factor(batch_idx)
@@ -673,8 +678,6 @@ class SVIExperiment(BaseCovariateExperiment):
         self.scheduler.step()
         loss = torch.as_tensor(loss)
         self.log('train_loss', loss, on_step=False, on_epoch=True)
-        af = self.pyro_model.annealing_factor
-        self.log('annealing_factor', af, on_step=False, on_epoch=True)
         metrics = self.get_trace_metrics(batch)
         if np.isnan(loss):
             self.logger.experiment.add_text('nan', f'nand at {self.current_epoch}:\n{metrics}')
@@ -714,8 +717,8 @@ class SVIExperiment(BaseCovariateExperiment):
             '--cf-elbo-type', default=-1, choices=[-1, 0, 1, 2],
             help="-1: randomly select per batch, 0: shuffle thickness, 1: shuffle intensity, 2: shuffle both (default: %(default)s)")
         parser.add_argument('--annealing-epochs', default=50, type=int, help="anneal kl div in z for this # epochs (default: %(default)s)")
-        parser.add_argument('--min-annealing-factor', default=0.2, type=float, help="anneal kl div in z starting here (default: %(default)s)")
-        parser.add_argument('--max-annealing-factor', default=1.0, type=float, help="anneal kl div in z ending here (default: %(default)s)")
+        parser.add_argument('--min-annealing-factor', default=[0.2], type=float, nargs='+', help="anneal kl div in z starting here (default: %(default)s)")
+        parser.add_argument('--max-annealing-factor', default=[1.0], type=float, nargs='+', help="anneal kl div in z ending here (default: %(default)s)")
         parser.add_argument('--tracegraph-elbo', default=False, action='store_true', help="use tracegraph elbo (much more computationally expensive) (default: %(default)s)")
         return parser
 

@@ -242,7 +242,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
                 z_probs = getattr(self, f'z_probs_{i}')
                 temperature = torch.tensor(2./3., device=ctx.device, requires_grad=False)
                 z_dist = RelaxedBernoulliStraightThrough(temperature, probs=z_probs).to_event(3)
-            with poutine.scale(scale=self.annealing_factor):
+            with poutine.scale(scale=self.annealing_factor[i]):
                 z.append(pyro.sample(f'z{i}', z_dist))
         z[-1] = torch.cat([z[-1], ctx], 1)
 
@@ -278,7 +278,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
                     ctx_ = ctx_attn(ctx).view(batch_size, -1, 1, 1)
                     hidden_i = hidden[i] * ctx_
                     z_dist = latent_enc.predict(hidden_i)
-                with poutine.scale(scale=self.annealing_factor):
+                with poutine.scale(scale=self.annealing_factor[i]):
                     z.append(pyro.sample(f'z{i}', z_dist))
 
         return z

@@ -116,7 +116,7 @@ class ConditionalFlowVISEM(BaseVISEM):
         z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms) if self.use_prior_flow else z_base_dist
         _ = self.prior_affine
         _ = self.prior_flow_components
-        with poutine.scale(scale=self.annealing_factor):
+        with poutine.scale(scale=self.annealing_factor[-1]):
             z = pyro.sample('z', z_dist)
         latent = torch.cat([z, ctx], 1)
 
@@ -143,7 +143,7 @@ class ConditionalFlowVISEM(BaseVISEM):
             z_dist = TransformedDistribution(z_base_dist, self.posterior_flow_transforms) if self.use_posterior_flow else z_base_dist
             _ = self.posterior_affine
             _ = self.posterior_flow_components
-            with poutine.scale(scale=self.annealing_factor):
+            with poutine.scale(scale=self.annealing_factor[-1]):
                 z = pyro.sample('z', z_dist)
 
         return z
