@@ -1,5 +1,6 @@
 from typing import List
 import torch
+from torch.nn import functional as F
 from pyro.distributions import (
     Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
     Independent, MultivariateNormal, Normal, TorchDistribution,
@@ -32,7 +33,9 @@ class _DeepIndepNormal(DeepConditional):
 
     def predict(self, x, ctx=None) -> Independent:
         mean, logstd = self(x, ctx)
-        std = (logstd + self.logstd_ref).exp() + 1e-5
+        # use softplus b/c behaves like e^x for (large) neg numbers
+        # but doesn't blow up for large positive numbers (leading to nans)
+        std = F.softplus(logstd + self.logstd_ref) + 1e-5
         event_ndim = len(mean.shape[1:])  # keep only batch dimension
         return Normal(mean, std).to_event(event_ndim)
 
@@ -102,7 +105,7 @@ class _DeepIndepMixtureNormal(DeepConditional):
 
     def predict(self, x) -> Independent:
         mean, logstd, component = self(x)
-        std = logstd.exp() + 1e-5
+        std = F.softplus(logstd) + 1e-5
         component = torch.log_softmax(component, dim=-1)
         event_ndim = 0
         return MixtureOfDiagNormalsSharedCovariance(mean, std, component).to_event(event_ndim)
@@ -138,7 +141,7 @@ class DeepMultivariateNormal(DeepConditional):
     def forward(self, x):
         h = self.backbone(x)
         mean = self.mean_head(h)
-        diag = self.logdiag_head(h).exp()
+        diag = F.softplus(self.logdiag_head(h))
         lower = self.lower_head(h)
         scale_tril = _assemble_tril(diag, lower)
         return mean, scale_tril
@@ -163,7 +166,7 @@ class DeepLowRankMultivariateNormal(DeepConditional):
     def forward(self, x):
         h = self.backbone(x)
         mean = self.mean_head(h)
-        diag = self.logdiag_head(h).exp()
+        diag = F.softplus(self.logdiag_head(h))
         factors = self.factor_head(h).view(x.shape[0], self.latent_dim, self.rank)
 
         return mean, diag, factors
