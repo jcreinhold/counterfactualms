@@ -282,9 +282,9 @@ class BaseVISEM(BaseSEM):
             self.decoder = Conv2dIndepNormal(decoder, self.head_filters, co,
                 use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm,
                 logstd_ref=self.logstd_init)
-            torch.nn.init.kaiming_normal_(self.decoder.logstd_head[-1].weight, nonlinearity='linear')
+            torch.nn.init.zeros_(self.decoder.logstd_head[-1].weight)
             self.decoder.logstd_head[-1].weight.requires_grad = True
-            torch.nn.init.zeros_(self.decoder.logstd_head[-1].bias)
+            torch.nn.init.normal_(self.decoder.logstd_head[-1].bias, 0., 1e-1)
             self.decoder.logstd_head[-1].bias.requires_grad = True
 
         elif self.decoder_type == 'multivariate_gaussian':
