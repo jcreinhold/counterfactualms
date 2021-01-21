@@ -46,6 +46,7 @@ class BaseHierarchicalVISEM(BaseVISEM):
         if len(self.hierarchical_layers) != len(self.intermediate_shapes):
             raise ValueError('Something went wrong. The # of hierarchical layers != # of intermediate shapes')
         self.n_levels = len(self.intermediate_shapes)
+        self.annealing_factor = [1. for _ in range(self.n_levels)]
         self.last_layer = len(self.enc_filters)
         for i, (z_size, layer) in enumerate(zip(self.intermediate_shapes, self.hierarchical_layers)):
             n_latent_channels = z_size[0]
