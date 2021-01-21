@@ -29,7 +29,7 @@ dependencies:
   - cloudpickle
   - coverage
   - cryptography
-  - cudatoolkit=10.1
+  - cudatoolkit=10.2
   - cycler
   - cytoolz
   - dataclasses
@@ -95,7 +95,6 @@ dependencies:
   - multidict
   - nbclient
   - nbconvert
-  - nbdejs
   - nbformat
   - nbsphinx
   - nbstripout
@@ -105,6 +104,7 @@ dependencies:
   - networkx
   - nibabel
   - ninja
+  - nodejs
   - notebook
   - numpy
   - numpy-base

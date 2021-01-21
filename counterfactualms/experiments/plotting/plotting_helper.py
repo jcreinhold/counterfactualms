@@ -3,7 +3,6 @@ from functools import partial
 import inspect
 import os
 import re
-import traceback
 import warnings
 
 import matplotlib.pyplot as plt
@@ -23,7 +22,7 @@ diff_cm = 'seismic'
 
 from counterfactualms.datasets.calabresi import CalabresiDataset
 
-downsample = None
+resize = None
 crop_size = None
 calabresi_test = None
 n_rot90 = 0
@@ -31,7 +30,6 @@ n_rot90 = 0
 from counterfactualms.experiments import calabresi  # noqa: F401
 from counterfactualms.experiments.calabresi.base_experiment import EXPERIMENT_REGISTRY, MODEL_REGISTRY  # noqa: F401
 
-experiments = ['ConditionalVISEM']
 models = {}
 loaded_models = {}
 device = None
@@ -43,7 +41,7 @@ variables = (
     'ventricle_volume',
     'lesion_volume',
     'duration',
-    'score',
+    'edss',
 )
 var_name = {
     'ventricle_volume': 'v',
@@ -51,11 +49,11 @@ var_name = {
     'lesion_volume': 'l',
     'sex': 's',
     'age': 'a',
-    'score': 'e',
+    'edss': 'e',
     'duration': 'd',
 }
 value_fmt = {
-    'score': lambda s: rf'{np.round(s,2):.2g}',
+    'edss': lambda s: rf'{np.round(s,2):.2g}',
     'duration': lambda s: rf'{np.round(s,2):.2g}\,\mathrm{{y}}',
     'ventricle_volume': lambda s: rf'{np.round(s/1000,2):.2g}\,\mathrm{{ml}}',
     'brain_volume': lambda s: rf'{int(np.round(s/1000)):d}\,\mathrm{{ml}}',
@@ -65,7 +63,7 @@ value_fmt = {
     'type': lambda s: r'{}'.format(['\mathrm{HC}', '\mathrm{MS}'][int(s)]),
 }
 save_fmt = {
-    'score': lambda s: f'{np.round(s,2):.2g}',
+    'edss': lambda s: f'{np.round(s,2):.2g}',
     'duration': lambda s: f'{np.round(s,2):.2g}',
     'ventricle_volume': lambda s: f'{np.round(s/1000,2):.2g}',
     'brain_volume': lambda s: f'{int(np.round(s/1000)):d}',
@@ -75,73 +73,68 @@ save_fmt = {
     'type': lambda s: '{}'.format(['HC', 'MS'][int(s)]),
 }
 
+imshow_kwargs = dict(vmin=0., vmax=255.)
+_buffers_to_load = ('norm', 'permutation', 'slice_number')
+
 
 def get_best_model(model_paths):
     min_score = np.inf
-    min_klz = np.inf
+    min_other = np.inf
     idx = None
     model_paths = [mp for mp in model_paths if 'last' not in mp]
     for i, mp in enumerate(model_paths):
         ms = mp.split('=')[-2:]
         ms = [re.sub('[^\d.-]+','', m) for m in ms]
-        klz = float(ms[0][:-1])
+        other = float(ms[0][:-1])
         score = float(ms[1][:-1])
         if score < min_score:
             min_score = score
-            min_klz = klz
+            min_other = other
             idx = i
         elif score == min_score:
-            if klz < min_klz:
-                min_klz = klz
+            if other < min_other:
+                min_other = other
                 idx = i
     return model_paths[idx]
 
 
-def setup(model_paths, csv_path, exp_crop_size=(224, 224), exp_downsample=2, use_gpu=True):
+def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True, strict=True):
     """ run this first with paths to models corresponding to experiments """
-    if isinstance(model_paths, str):
-        model_paths = [model_paths]
-    if len(model_paths) != len(experiments):
-        raise ValueError('Provided paths do not match number of experiments')
-    for exp, path in zip(experiments, model_paths):
-        try:
-            ckpt = torch.load(path, map_location=torch.device('cpu'))
-            hparams = ckpt['hyper_parameters']
-            model_class = MODEL_REGISTRY[hparams['model']]
-            model_params = {
-                k: v for k, v in hparams.items() if (k in inspect.signature(model_class.__init__).parameters
-                                                     or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
-                                                     or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
-            }
-            model_params['img_shape'] = hparams['crop_size']
-            new_state_dict = OrderedDict()
-            for key, value in ckpt['state_dict'].items():
-                new_key = key.replace('pyro_model.', '')
-                new_state_dict[new_key] = value
-            loaded_model = model_class(**model_params)
-            loaded_model.load_state_dict(new_state_dict)
-            for p in loaded_model._buffers.keys():
-                if 'norm' in p:
-                    setattr(loaded_model, p, getattr(loaded_model, p))
-            loaded_model.eval()
-            global device
-            device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
-            global loaded_models
-            loaded_models[exp] = loaded_model.to(device)
-            global crop_size
-            crop_size = exp_crop_size
-            global downsample
-            downsample = exp_downsample
-            global calabresi_test
-            calabresi_test = CalabresiDataset(csv_path, crop_type='center', downsample=downsample, crop_size=crop_size)
-            def sample_pgm(num_samples, model):
-                with pyro.plate('observations', num_samples):
-                    return model.pgm_model()
-            global models
-            models[exp] = partial(sample_pgm, model=loaded_model)
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
+    ckpt = torch.load(model_path, map_location=torch.device('cpu'))
+    hparams = ckpt['hyper_parameters']
+    exp = hparams['model']
+    model_class = MODEL_REGISTRY[exp]
+    model_params = {
+        k: v for k, v in hparams.items() if (k in inspect.signature(model_class.__init__).parameters
+                                             or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
+                                             or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
+    }
+    model_params['img_shape'] = hparams['resize'] if 'resize' in hparams else exp_resize
+    new_state_dict = OrderedDict()
+    for key, value in ckpt['state_dict'].items():
+        new_key = key.replace('pyro_model.', '')
+        new_state_dict[new_key] = value
+    loaded_model = model_class(**model_params)
+    loaded_model.load_state_dict(new_state_dict, strict=strict)
+    global device
+    device = torch.device('cuda' if torch.cuda.is_available() and use_gpu else 'cpu')
+    for p in loaded_model._buffers.keys():
+        if any([(b in p) for b in _buffers_to_load]):
+            setattr(loaded_model, p, getattr(loaded_model, p).to(device))
+    loaded_model.eval()
+    global loaded_models
+    loaded_models[exp] = loaded_model.to(device)
+    global crop_size
+    crop_size = exp_crop_size
+    global resize
+    resize = exp_resize
+    global calabresi_test
+    calabresi_test = CalabresiDataset(csv_path, crop_type='center', resize=resize, crop_size=crop_size)
+    def sample_pgm(num_samples, model):
+        with pyro.plate('observations', num_samples):
+            return model.pgm_model()
+    global models
+    models[exp] = partial(sample_pgm, model=loaded_model)
 
 
 def fmt_intervention(intervention):
@@ -163,19 +156,19 @@ def fmt_save(intervention):
 
 
 def prep_data(batch):
-    x = batch['image'].unsqueeze(0) * 255.
+    x = 255. * batch['image'].float().unsqueeze(0)
     age = batch['age'].unsqueeze(0).unsqueeze(0).float()
     sex = batch['sex'].unsqueeze(0).unsqueeze(0).float()
     ventricle_volume = batch['ventricle_volume'].unsqueeze(0).unsqueeze(0).float()
     brain_volume = batch['brain_volume'].unsqueeze(0).unsqueeze(0).float()
     lesion_volume = batch['lesion_volume'].unsqueeze(0).unsqueeze(0).float()
-    score = batch['score'].unsqueeze(0).unsqueeze(0).float()
+    edss = batch['edss'].unsqueeze(0).unsqueeze(0).float()
     duration = batch['duration'].unsqueeze(0).unsqueeze(0).float()
     type = batch['type'].unsqueeze(0).unsqueeze(0).float()
-    x = x.float()
+    slice_number = batch['slice_number'].unsqueeze(0).unsqueeze(0).float()
     return {'x': x, 'age': age, 'sex': sex, 'ventricle_volume': ventricle_volume,
             'brain_volume': brain_volume, 'lesion_volume': lesion_volume,
-            'score': score, 'duration': duration, 'type': type}
+            'edss': edss, 'duration': duration, 'type': type, 'slice_number': slice_number}
 
 
 def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32):
@@ -200,14 +193,21 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
         torch.cuda.empty_cache()
 
     for i, intervention in enumerate(interventions):
-        x = imgs[i]
-        x_test = orig_data['x']
+        x = imgs[i].squeeze()
+        x_test = orig_data['x'].squeeze()
         diff = (x - x_test).squeeze()
         if not normalise_all:
             lim = diff.abs().max()
-        ax[0, i].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
+        if x.ndim == 3:
+            if x.shape[0] == 3:
+                x = x[1]
+                x_test = x_test[1]
+                diff = diff[1]
+            else:
+                raise ValueError(f'Invalid channel size: {x.shape[0]}.')
+        ax[0, i].imshow(np.rot90(x_test, n_rot90), img_cm, **imshow_kwargs)
         ax[0, i].set_title(fmt_intervention(intervention))
-        ax[1, i].imshow(np.rot90(x.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
+        ax[1, i].imshow(np.rot90(x, n_rot90), img_cm, **imshow_kwargs)
         ax[2, i].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
         for axi in ax[:, i]:
             axi.axis('off')
@@ -215,7 +215,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
             axi.yaxis.set_major_locator(plt.NullLocator())
 
     orig_data['type'] = ms_type
-    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$; $d={duration}$; $e={score}$').format(
+    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$; $d={duration}$; $e={edss}$').format(
         **{att: value_fmt[att](orig_data[att].item()) for att in variables}
     )
     fig.suptitle(suptitle, fontsize=13)
@@ -231,8 +231,7 @@ def interactive_plot(model_name):
         x = np.clip(x, 0., 255.)
         x = x.astype(np.uint8)
         x = Image.fromarray(x)
-        sz = [downsample*s for s in x.size]
-        x = x.resize(sz, resample=Image.BILINEAR)
+        x = x.resize(resize, resample=Image.BILINEAR)
         return x
 
     def plot_intervention(intervention, idx, num_samples=32, save_image_dir='', save=False):
@@ -246,13 +245,21 @@ def interactive_plot(model_name):
         cond = {k: torch.tensor([[v]]).to(device) for k, v in intervention.items()}
         counterfactual = loaded_models[model_name].counterfactual(og, cond, num_samples)
         counterfactual = {k: v.detach().cpu() for k, v in counterfactual.items()}
-        x = counterfactual['x']
+        x = counterfactual['x'].squeeze()
+        x_test = x_test.squeeze()
         diff = (x - x_test).squeeze()
+        if x.ndim == 3:
+            if x.shape[0] == 3:
+                x = x[1]
+                x_test = x_test[1]
+                diff = diff[1]
+            else:
+                raise ValueError(f'Invalid channel size: {x.shape[0]}.')
         lim = diff.abs().max()
         ax[1].set_title('Original')
-        ax[1].imshow(np.rot90(x_test.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
+        ax[1].imshow(np.rot90(x_test, n_rot90), img_cm, **imshow_kwargs)
         ax[2].set_title(fmt_intervention(intervention))
-        ax[2].imshow(np.rot90(x.squeeze(), n_rot90), img_cm, vmin=0, vmax=255)
+        ax[2].imshow(np.rot90(x, n_rot90), img_cm, **imshow_kwargs)
         ax[3].set_title('Difference')
         im = ax[3].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
         plt.colorbar(im)
@@ -267,7 +274,7 @@ def interactive_plot(model_name):
 
         orig_data['type'] = ms_type
         att_str = ('$s={sex}$\n$a={age}$\n$b={brain_volume}$\n$v={ventricle_volume}$\n$l={lesion_volume}$\n'
-                   '$d={duration}$\n$e={score}$\n$t={type}$').format(
+                   '$d={duration}$\n$e={edss}$\n$t={type}$').format(
             **{att: value_fmt[att](orig_data[att].item()) for att in variables + ('type',)}
         )
 
@@ -291,9 +298,9 @@ def interactive_plot(model_name):
     from IPython.display import display
 
     def plot(image, age, sex, brain_volume, ventricle_volume, lesion_volume,
-             duration, score,
+             duration, edss,
              do_age, do_sex, do_brain_volume, do_ventricle_volume, do_lesion_volume,
-             do_duration, do_score,
+             do_duration, do_edss,
              save_image_dir, save):
         intervention = {}
         if do_age:
@@ -308,8 +315,8 @@ def interactive_plot(model_name):
             intervention['lesion_volume'] = lesion_volume * 1000.
         if do_duration:
             intervention['duration'] = duration
-        if do_score:
-            intervention['score'] = score
+        if do_edss:
+            intervention['edss'] = edss
 
         plot_intervention(intervention, image, save_image_dir=save_image_dir, save=save)
 
@@ -326,8 +333,8 @@ def interactive_plot(model_name):
         do_lesion_volume=Checkbox(description='do(lesion_volume)'),
         duration=FloatSlider(min=1e-5, max=24., step=1., continuous_update=False, description='Duration (y):', style={'description_width': 'initial'}),
         do_duration=Checkbox(description='do(duration)'),
-        score=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='Score:', style={'description_width': 'initial'}),
-        do_score=Checkbox(description='do(score)'),
+        edss=FloatSlider(min=1e-5, max=10., step=1., continuous_update=False, description='EDSS:', style={'description_width': 'initial'}),
+        do_edss=Checkbox(description='do(edss)'),
         save_image_dir=Text(value='', placeholder='Full path', description='Save Image Directory:', style={'description_width': 'initial'}),
         save=Checkbox(description='Save')
         )

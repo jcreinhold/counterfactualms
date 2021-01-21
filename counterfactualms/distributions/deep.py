@@ -1,11 +1,14 @@
+from typing import List
 import torch
+from torch.nn import functional as F
 from pyro.distributions import (
     Bernoulli, LowRankMultivariateNormal, Beta, Gamma,  # noqa: F401
     Independent, MultivariateNormal, Normal, TorchDistribution,
-    MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance
+    MixtureOfDiagNormalsSharedCovariance
 )
 from torch import nn
 
+from counterfactualms.arch.layers import Conv2d
 from counterfactualms.distributions.params import MixtureParams
 
 
@@ -15,21 +18,24 @@ class DeepConditional(nn.Module):
 
 
 class _DeepIndepNormal(DeepConditional):
-    def __init__(self, backbone: nn.Module, mean_head: nn.Module, logvar_head: nn.Module):
+    def __init__(self, backbone:nn.Module, mean_head:nn.Module, logstd_head:nn.Module, logstd_ref:float=0.):
         super().__init__()
         self.backbone = backbone
         self.mean_head = mean_head
-        self.logvar_head = logvar_head
+        self.logstd_head = logstd_head
+        self.logstd_ref = logstd_ref
 
-    def forward(self, x):
-        h = self.backbone(x)
+    def forward(self, x, ctx=None):
+        h = self.backbone(x) if ctx is None else self.backbone(x, ctx)
         mean = self.mean_head(h)
-        logvar = self.logvar_head(h)
-        return mean, logvar
+        logstd = self.logstd_head(h)
+        return mean, logstd
 
-    def predict(self, x) -> Independent:
-        mean, logvar = self(x)
-        std = (.5 * logvar).exp() + 1e-5
+    def predict(self, x, ctx=None) -> Independent:
+        mean, logstd = self(x, ctx)
+        # use softplus b/c behaves like e^x for (large) neg numbers
+        # but doesn't blow up for large positive numbers (leading to nans)
+        std = F.softplus(logstd + self.logstd_ref) + 1e-5
         event_ndim = len(mean.shape[1:])  # keep only batch dimension
         return Normal(mean, std).to_event(event_ndim)
 
@@ -39,16 +45,33 @@ class DeepIndepNormal(_DeepIndepNormal):
         super().__init__(
             backbone=backbone,
             mean_head=nn.Linear(hidden_dim, out_dim),
-            logvar_head=nn.Linear(hidden_dim, out_dim)
+            logstd_head=nn.Linear(hidden_dim, out_dim)
         )
 
 
+def _conv_layer(ci, co, use_weight_norm=False, use_spectral_norm=False):
+    return [Conv2d(ci, co, 3, 1, 1, bias=False,
+                   use_weight_norm=use_weight_norm,
+                   use_spectral_norm=use_spectral_norm),
+            nn.BatchNorm2d(co, momentum=0.05),
+            nn.LeakyReLU(.1, inplace=True)]
+
+
+def _create_head(head_filters, out_channels:int=1, **kwargs):
+    layers = [_conv_layer(hi, ho, **kwargs) for hi, ho in zip(head_filters, head_filters[1:])]
+    layers = [h for l in layers for h in l]
+    layers.append(nn.Conv2d(head_filters[-1], out_channels, 1))
+    return nn.Sequential(*layers)
+
+
 class Conv2dIndepNormal(_DeepIndepNormal):
-    def __init__(self, backbone: nn.Module, hidden_channels: int, out_channels: int = 1):
+    def __init__(self, backbone:nn.Module, hidden_channels:List[int],
+                 out_channels:int=1, logstd_ref:float=-5., **kwargs):
         super().__init__(
             backbone=backbone,
-            mean_head=nn.Conv2d(hidden_channels, out_channels=out_channels, kernel_size=1),
-            logvar_head=nn.Conv2d(hidden_channels, out_channels=out_channels, kernel_size=1)
+            mean_head=_create_head(hidden_channels, out_channels, **kwargs),
+            logstd_head=_create_head(hidden_channels, out_channels, **kwargs),
+            logstd_ref=logstd_ref
         )
 
 
@@ -57,15 +80,15 @@ class Conv3dIndepNormal(_DeepIndepNormal):
         super().__init__(
             backbone=backbone,
             mean_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1),
-            logvar_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1)
+            logstd_head=nn.Conv3d(hidden_channels, out_channels=out_channels, kernel_size=1)
         )
 
 class _DeepIndepMixtureNormal(DeepConditional):
-    def __init__(self, backbone:nn.Module, mean_head:nn.ModuleList, logvar_head:nn.ModuleList, component_head:nn.Module):
+    def __init__(self, backbone:nn.Module, mean_head:nn.ModuleList, logstd_head:nn.Module, component_head:nn.Module):
         super().__init__()
         self.backbone = backbone
         self.mean_head = mean_head
-        self.logvar_head = logvar_head
+        self.logstd_head = logstd_head
         self.component_head = component_head
         def _init_normal(m):
             if type(m) == nn.Linear:
@@ -76,13 +99,14 @@ class _DeepIndepMixtureNormal(DeepConditional):
     def forward(self, x):
         h = self.backbone(x)
         mean = torch.stack([mh(h) for mh in self.mean_head],1)
-        logvar = self.logvar_head(h)
+        logstd = self.logstd_head(h)
         component = self.component_head(h)
-        return mean, logvar, component
+        return mean, logstd, component
 
     def predict(self, x) -> Independent:
-        mean, logvar, component = self(x)
-        std = (0.5 * logvar).exp() + 1e-5
+        mean, logstd, component = self(x)
+        std = F.softplus(logstd) + 1e-5
+        component = torch.log_softmax(component, dim=-1)
         event_ndim = 0
         return MixtureOfDiagNormalsSharedCovariance(mean, std, component).to_event(event_ndim)
 
@@ -92,7 +116,7 @@ class DeepIndepMixtureNormal(_DeepIndepMixtureNormal):
         super().__init__(
             backbone=backbone,
             mean_head=nn.ModuleList([nn.Linear(hidden_dim, out_dim) for _ in range(n_comp)]),
-            logvar_head=nn.Linear(hidden_dim, out_dim),
+            logstd_head=nn.Linear(hidden_dim, out_dim),
             component_head=nn.Linear(hidden_dim, n_comp)
         )
 
@@ -117,7 +141,7 @@ class DeepMultivariateNormal(DeepConditional):
     def forward(self, x):
         h = self.backbone(x)
         mean = self.mean_head(h)
-        diag = self.logdiag_head(h).exp()
+        diag = F.softplus(self.logdiag_head(h))
         lower = self.lower_head(h)
         scale_tril = _assemble_tril(diag, lower)
         return mean, scale_tril
@@ -142,7 +166,7 @@ class DeepLowRankMultivariateNormal(DeepConditional):
     def forward(self, x):
         h = self.backbone(x)
         mean = self.mean_head(h)
-        diag = self.logdiag_head(h).exp()
+        diag = F.softplus(self.logdiag_head(h))
         factors = self.factor_head(h).view(x.shape[0], self.latent_dim, self.rank)
 
         return mean, diag, factors

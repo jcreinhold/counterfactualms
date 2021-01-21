@@ -60,8 +60,6 @@ def main():
         os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpus)
         args.gpus = 1
 
-    # TODO: push to lightning
-    args.gradient_clip_val = float(args.gradient_clip_val)
 
     groups = {}
     for group in parser._action_groups:
@@ -79,17 +77,20 @@ def main():
     for k, v in vars(model_params).items():
         setattr(hparams, k, v)
 
+    setattr(hparams, 'n_epochs', args.max_epochs)
+    setattr(hparams, 'verbosity', exp_args.verbosity)
+
     callbacks = [ModelCheckpoint(
-        monitor='score',
+        monitor='val_loss',
         save_top_k=10,
         save_last=True,
         mode='min',
-        filename='{epoch}-{klz:.2f}-{score:.2f}'
+        filename='{epoch}-{recon:.2f}-{val_loss:.2f}'
     )]
     trainer = Trainer.from_argparse_args(lightning_args, callbacks=callbacks)
 
     model_dict = vars(model_params)
-    model_dict['img_shape'] = args.crop_size
+    model_dict['img_shape'] = args.resize if args.resize != (0,0) else args.crop_size
     model = model_class(**model_dict)
     if exp_args.model_path != 'none':
         ckpt = torch.load(exp_args.model_path, map_location=torch.device('cpu'))

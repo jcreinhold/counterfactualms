@@ -1,7 +1,7 @@
 import pyro
-from pyro.nn import pyro_method, DenseNN
+from pyro.nn import pyro_method
 from pyro.distributions import (
-    Normal, Bernoulli, Uniform, TransformedDistribution, MixtureOfDiagNormalsSharedCovariance  # noqa: F401
+    Normal, Bernoulli, Uniform, TransformedDistribution  # noqa: F401
 )
 from pyro.distributions.conditional import ConditionalTransformedDistribution
 from pyro import poutine
@@ -9,12 +9,12 @@ import torch
 from torch import nn
 
 from counterfactualms.arch.thirdparty.neural_operations import Swish
-from counterfactualms.distributions.transforms.affine import ConditionalAffineTransform
 from counterfactualms.experiments.calabresi.base_experiment import MODEL_REGISTRY
 from counterfactualms.experiments.calabresi.base_sem_experiment import BaseVISEM
+from counterfactualms.utils.pyro_modifications import conditional_spline
 
 
-class ConditionalVISEM(BaseVISEM):
+class ConditionalFlowVISEM(BaseVISEM):
     # number of context dimensions for decoder (4 b/c brain vol, ventricle vol, lesion vol, slice num)
     context_dim = 4
 
@@ -23,32 +23,27 @@ class ConditionalVISEM(BaseVISEM):
 
         nonlinearity = Swish() if self.use_swish else nn.LeakyReLU(0.1)
 
-        brain_volume_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=nonlinearity)
-        self.brain_volume_flow_components = ConditionalAffineTransform(context_nn=brain_volume_net, event_dim=0)
+        self.brain_volume_flow_components = conditional_spline(1, 2, [8, 16], nonlinearity=nonlinearity)
         self.brain_volume_flow_transforms = [
             self.brain_volume_flow_components, self.brain_volume_flow_constraint_transforms
         ]
 
-        ventricle_volume_net = DenseNN(3, [12, 20], param_dims=[1, 1], nonlinearity=nonlinearity)
-        self.ventricle_volume_flow_components = ConditionalAffineTransform(context_nn=ventricle_volume_net, event_dim=0)
+        self.ventricle_volume_flow_components = conditional_spline(1, 3, [12, 20], nonlinearity=nonlinearity)
         self.ventricle_volume_flow_transforms = [
             self.ventricle_volume_flow_components, self.ventricle_volume_flow_constraint_transforms
         ]
 
-        lesion_volume_net = DenseNN(4, [16, 24], param_dims=[1, 1], nonlinearity=nonlinearity)
-        self.lesion_volume_flow_components = ConditionalAffineTransform(context_nn=lesion_volume_net, event_dim=0)
+        self.lesion_volume_flow_components = conditional_spline(1, 4, [16, 24], nonlinearity=nonlinearity)
         self.lesion_volume_flow_transforms = [
             self.lesion_volume_flow_components, self.lesion_volume_flow_constraint_transforms
         ]
 
-        duration_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=nonlinearity)
-        self.duration_flow_components = ConditionalAffineTransform(context_nn=duration_net, event_dim=0)
+        self.duration_flow_components = conditional_spline(1, 2, [8, 16], nonlinearity=nonlinearity)
         self.duration_flow_transforms = [
             self.duration_flow_components, self.duration_flow_constraint_transforms
         ]
 
-        edss_net = DenseNN(2, [8, 16], param_dims=[1, 1], nonlinearity=nonlinearity)
-        self.edss_flow_components = ConditionalAffineTransform(context_nn=edss_net, event_dim=0)
+        self.edss_flow_components = conditional_spline(1, 2, [8, 16], nonlinearity=nonlinearity)
         self.edss_flow_transforms = [
             self.edss_flow_components, self.edss_flow_constraint_transforms
         ]
@@ -65,8 +60,8 @@ class ConditionalVISEM(BaseVISEM):
 
         age_base_dist = Normal(self.age_base_loc, self.age_base_scale).to_event(1)
         age_dist = TransformedDistribution(age_base_dist, self.age_flow_transforms)
-        age = pyro.sample('age', age_dist)
         _ = self.age_flow_components
+        age = pyro.sample('age', age_dist)
         age_ = self.age_flow_constraint_transforms.inv(age)
 
         duration_context = torch.cat([sex, age_], 1)
@@ -86,8 +81,8 @@ class ConditionalVISEM(BaseVISEM):
         brain_context = torch.cat([sex, age_], 1)
         brain_volume_base_dist = Normal(self.brain_volume_base_loc, self.brain_volume_base_scale).to_event(1)
         brain_volume_dist = ConditionalTransformedDistribution(brain_volume_base_dist, self.brain_volume_flow_transforms).condition(brain_context)
-        brain_volume = pyro.sample('brain_volume', brain_volume_dist)
         _ = self.brain_volume_flow_components
+        brain_volume = pyro.sample('brain_volume', brain_volume_dist)
         brain_volume_ = self.brain_volume_flow_constraint_transforms.inv(brain_volume)
 
         ventricle_context = torch.cat([age_, brain_volume_, duration_], 1)
@@ -117,11 +112,7 @@ class ConditionalVISEM(BaseVISEM):
         slice_number = obs['slice_number']
         ctx = torch.cat([ventricle_volume_, brain_volume_, lesion_volume_, slice_number], 1)
 
-        if self.prior_components > 1:
-            z_scale = (0.5 * self.z_scale).exp() + 1e-5  # z_scale parameter is logvar
-            z_base_dist = MixtureOfDiagNormalsSharedCovariance(self.z_loc, z_scale, self.z_components).to_event(0)
-        else:
-            z_base_dist = Normal(self.z_loc, self.z_scale).to_event(1)
+        z_base_dist = Normal(self.z_loc, self.z_scale).to_event(1)
         z_dist = TransformedDistribution(z_base_dist, self.prior_flow_transforms) if self.use_prior_flow else z_base_dist
         _ = self.prior_affine
         _ = self.prior_flow_components
@@ -158,4 +149,4 @@ class ConditionalVISEM(BaseVISEM):
         return z
 
 
-MODEL_REGISTRY[ConditionalVISEM.__name__] = ConditionalVISEM
+MODEL_REGISTRY[ConditionalFlowVISEM.__name__] = ConditionalFlowVISEM

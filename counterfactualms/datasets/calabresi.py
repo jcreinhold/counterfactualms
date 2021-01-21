@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
-from skimage.io import imread
+from PIL import Image
 import torch
 from torch.utils.data.dataset import Dataset
 import torchvision as tv
 
 
 class CalabresiDataset(Dataset):
-    def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), downsample:int=None, eps:float=1e-5):
+    def __init__(self, csv_path, crop_type=None, crop_size=(192, 192), resize=None, eps:float=1e-4):
         super().__init__()
         self.csv_path = csv_path
         csv = pd.read_csv(csv_path)
@@ -16,7 +16,7 @@ class CalabresiDataset(Dataset):
         csv['treatment_propagated'] = csv['treatment_propagated'].map({
             np.nan: -1., 'N': 0., 'Y': 1.})
         csv['treatment'] = csv['treatment'].map({
-            np.nan: -1., 'none': 0., 'glatiramer acetate': 1.,
+            np.nan: 0., 'none': 0., 'glatiramer acetate': 1.,
             'interferon beta': 2., 'natalizumab': 3., 'other': 4.})
         csv['duration'] = csv['duration'].fillna(0.) + eps
         csv['edss'] = csv['edss'].fillna(0.) + eps
@@ -44,8 +44,7 @@ class CalabresiDataset(Dataset):
         self.csv = csv
         self.crop_type = crop_type
         self.crop_size = crop_size
-        self.downsample = downsample
-        self.resize = None if downsample is None else [cs // downsample for cs in self.crop_size]
+        self.resize = resize
 
     def __len__(self):
         return len(self.csv)
@@ -55,10 +54,9 @@ class CalabresiDataset(Dataset):
         item = item.to_dict()
         item = self._prepare_item(item)
         img_path = item['filename']
-        img = imread(img_path, as_gray=True)
+        img = Image.open(img_path)
 
         transform_list = []
-        transform_list += [tv.transforms.ToPILImage()]
         if self.crop_type is not None:
             if self.crop_type == 'center':
                 transform_list += [tv.transforms.CenterCrop(self.crop_size)]
@@ -89,5 +87,10 @@ class CalabresiDataset(Dataset):
         item['ventricle_volume'] = torch.as_tensor(item['ventricle_volume'], dtype=torch.float32)
         item['lesion_volume'] = torch.as_tensor(item['lesion_volume'], dtype=torch.float32)
         item['score'] = torch.as_tensor(item['score'], dtype=torch.float32)
+        item['edss'] = torch.as_tensor(item['edss'], dtype=torch.float32)
+        item['fss'] = torch.as_tensor(item['fss'], dtype=torch.float32)
+        item['msss'] = torch.as_tensor(item['msss'], dtype=torch.float32)
+        item['treatment'] = torch.as_tensor(item['treatment'], dtype=torch.float32)
+        item['treatment_propagated'] = torch.as_tensor(item['treatment_propagated'], dtype=torch.float32)
         item['slice_number'] = torch.as_tensor(item['slice_number'], dtype=torch.float32)
         return item

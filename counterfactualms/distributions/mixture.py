@@ -6,7 +6,7 @@ from pyro.distributions import Categorical, MultivariateNormal, TorchDistributio
 from counterfactualms.distributions.multivariate import MultivariateDistribution
 from counterfactualms.distributions.natural_mvn import NaturalMultivariateNormal
 from counterfactualms.distributions.products import product
-from counterfactualms.util import posdef_solve
+from counterfactualms.utils.linalg import posdef_solve
 
 T = TypeVar('T', bound=TorchDistribution)
 
