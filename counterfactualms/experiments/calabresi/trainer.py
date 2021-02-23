@@ -103,6 +103,8 @@ def main():
                     logger.info(f"Skip loading parameter: {new_key}, "
                                 f"required shape: {model_state_dict[new_key].shape}, "
                                 f"loaded shape: {state_dict[k].shape}")
+                    new_state_dict[new_key] = model_state_dict[new_key]
+                else:
                     new_state_dict[new_key] = state_dict[new_key]
             else:
                 logger.info(f"Dropping parameter {k}")
