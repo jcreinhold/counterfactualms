@@ -105,7 +105,12 @@ def main():
                                 f"loaded shape: {state_dict[k].shape}")
                     new_state_dict[new_key] = model_state_dict[new_key]
                 else:
-                    new_state_dict[new_key] = state_dict[new_key]
+                    weights = state_dict[k]
+                    anomaly_mask = ~torch.isfinite(weights)
+                    if anomaly_mask.any():
+                        logger.info(f'nan or inf in {new_key}. Replacing with random value.')
+                        weights[anomaly_mask] = torch.randn(anomaly_mask.sum())
+                    new_state_dict[new_key] = weights
             else:
                 logger.info(f"Dropping parameter {k}")
         model.load_state_dict(new_state_dict, strict=False)
