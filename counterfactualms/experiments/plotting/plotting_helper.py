@@ -171,8 +171,8 @@ def prep_data(batch):
             'edss': edss, 'duration': duration, 'type': type, 'slice_number': slice_number}
 
 
-def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32):
-    fig, ax = plt.subplots(3, len(interventions), figsize=(1.6 * len(interventions), 5), gridspec_kw=dict(wspace=0, hspace=0))
+def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32, save=None):
+    fig, ax = plt.subplots(2, len(interventions)+1, figsize=(1.6 * len(interventions), 5*(2/3)), gridspec_kw=dict(wspace=0, hspace=0))
     lim = 0
     orig_data = prep_data(calabresi_test[idx])
     ms_type = orig_data['type']
@@ -192,23 +192,25 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
         del og, cond
         torch.cuda.empty_cache()
 
+    x_test = orig_data['x'].squeeze()
+    orig = x_test[1] if x_test.ndim == 3 else x_test
+    ax[0, 0].imshow(np.rot90(orig, n_rot90), img_cm, **imshow_kwargs)
+    ax[0, 0].set_title('Original')
     for i, intervention in enumerate(interventions):
         x = imgs[i].squeeze()
-        x_test = orig_data['x'].squeeze()
         diff = (x - x_test).squeeze()
         if not normalise_all:
             lim = diff.abs().max()
         if x.ndim == 3:
             if x.shape[0] == 3:
                 x = x[1]
-                x_test = x_test[1]
                 diff = diff[1]
             else:
                 raise ValueError(f'Invalid channel size: {x.shape[0]}.')
-        ax[0, i].imshow(np.rot90(x_test, n_rot90), img_cm, **imshow_kwargs)
-        ax[0, i].set_title(fmt_intervention(intervention))
-        ax[1, i].imshow(np.rot90(x, n_rot90), img_cm, **imshow_kwargs)
-        ax[2, i].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
+        ax[0, i+1].set_title(fmt_intervention(intervention))
+        ax[0, i+1].imshow(np.rot90(x, n_rot90), img_cm, **imshow_kwargs)
+        ax[1, i+1].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
+    for i in range(len(interventions) + 1):
         for axi in ax[:, i]:
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
@@ -220,6 +222,8 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
     )
     fig.suptitle(suptitle, fontsize=13)
     fig.tight_layout()
+    if save is not None:
+        plt.savefig(save)
     plt.show()
 
 
