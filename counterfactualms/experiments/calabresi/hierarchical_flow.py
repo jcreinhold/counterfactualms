@@ -20,9 +20,10 @@ from counterfactualms.utils.pyro_modifications import conditional_spline
 
 
 class BaseHierarchicalVISEM(BaseVISEM):
-    def __init__(self, hierarchical_layers=(1,3,5), hierarchical_div=16, *args, **kwargs):
+    def __init__(self, hierarchical_layers=(1,3,5), hierarchical_div=16, temperature=2./3., *args, **kwargs):
         self.hierarchical_layers = hierarchical_layers
         self.hierarchical_div = hierarchical_div
+        self.temperature = temperature
         super().__init__(*args, **kwargs)
         self.encoder = HierarchicalEncoder(num_convolutions=self.num_convolutions, filters=self.enc_filters,
                                            latent_dim=self.latent_dim, div_factor=hierarchical_div,
@@ -65,7 +66,8 @@ class BaseHierarchicalVISEM(BaseVISEM):
                 self.latent_encoder.append(DeepRelaxedBernoulli(
                     Conv2d(n_latent_channels, n_latent_channels, 1,
                            use_weight_norm=self.use_weight_norm,
-                           use_spectral_norm=self.use_spectral_norm))
+                           use_spectral_norm=self.use_spectral_norm),
+                    temperature=temperature)
                 )
                 self.register_buffer(f'z_probs_{i}', 0.5*torch.ones(z_size.tolist(), requires_grad=False))
 
@@ -241,7 +243,7 @@ class ConditionalHierarchicalFlowVISEM(BaseHierarchicalVISEM):
                 _ = self.prior_flow_components
             else:
                 z_probs = getattr(self, f'z_probs_{i}')
-                temperature = torch.tensor(2./3., device=ctx.device, requires_grad=False)
+                temperature = torch.tensor(self.temperature, device=ctx.device, requires_grad=False)
                 z_dist = RelaxedBernoulliStraightThrough(temperature, probs=z_probs).to_event(3)
             with poutine.scale(scale=self.annealing_factor[i]):
                 z.append(pyro.sample(f'z{i}', z_dist))

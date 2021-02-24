@@ -471,6 +471,7 @@ class BaseVISEM(BaseSEM):
         parser.add_argument('--use-spectral-norm', default=False, action='store_true', help="use spectral norm in conv layers (not w/ nvae) (default: %(default)s)")
         parser.add_argument('--hierarchical-layers', default=(1,3,5), type=int, nargs='+', help="which filter layers are passed in hierarchical model (default: %(default)s)")
         parser.add_argument('--hierarchical-div', default=16, type=int, help="div factor in hierarchical model (default: %(default)s)")
+        parser.add_argument('--temperature', default=2./3., type=float, help="temperature for ST Gumbel-softmax layers (default: %(default)s)")
         parser.add_argument('--laplace-likelihood', default=False, action='store_true', help="use laplace likelihood for image (default: %(default)s)")
         parser.add_argument('--n-prior-flows', default=3, type=int, help="use this number of flows for prior in flow net (default: %(default)s)")
         parser.add_argument('--n-posterior-flows', default=3, type=int, help="use this number of flows for posterior in flow net (default: %(default)s)")
