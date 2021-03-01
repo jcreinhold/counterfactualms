@@ -1,5 +1,6 @@
 from collections import defaultdict
 import logging
+import os
 from typing import Mapping, Tuple
 
 import numpy as np
@@ -700,7 +701,10 @@ class SVIExperiment(BaseCovariateExperiment):
         return metrics
 
     def test_step(self, batch, batch_idx):
+        import nibabel as nib
         self._set_annealing_factor()
+        subject = batch['subject']
+        scan = batch['scan']
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
@@ -708,6 +712,13 @@ class SVIExperiment(BaseCovariateExperiment):
         for k, v in metrics.items():
             self.log('test/' + k, v, on_step=False, on_epoch=True)
         samples = self.build_test_samples(batch)
+        for intervention, data in samples.items():
+            cf = data.detach().cpu().numpy()
+            if self.hparams.pseudo3d:
+                cf = cf[:,1,...]  # get the middle slices
+            cf = cf.squeeze()
+            fn = os.path.join(self.hparams.test_dir, f'{subject}_{scan}_{intervention}.nii.gz')
+            nib.Nifti1Image(cf,None).to_filename(fn)
         return {'samples': samples, 'metrics': metrics}
 
     @classmethod

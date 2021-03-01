@@ -291,24 +291,9 @@ class BaseCovariateExperiment(pl.LightningModule):
 
     def get_counterfactual_conditions(self, batch):
         counterfactuals = {
-            'do(brain_volume=8000)':  {'brain_volume': torch.ones_like(batch['brain_volume']) * 8000},
-            'do(brain_volume=16000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 16000},
-            'do(ventricle_volume=500)':  {'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 500},
-            'do(ventricle_volume=2000)': {'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 2000},
-            'do(lesion_volume=0)':    {'lesion_volume': torch.ones_like(batch['lesion_volume']) * 1e-5},
-            'do(lesion_volume=1000)': {'lesion_volume': torch.ones_like(batch['lesion_volume']) * 1000.},
-            'do(age=20)': {'age': torch.ones_like(batch['age']) * 20},
-            'do(age=60)': {'age': torch.ones_like(batch['age']) * 60},
-            'do(sex=0)': {'sex': torch.zeros_like(batch['sex'])},
-            'do(sex=1)': {'sex': torch.ones_like(batch['sex'])},
-            'do(duration=0)': {'duration': torch.zeros_like(batch['duration']) + 1e-5},
-            'do(duration=12)': {'duration': torch.ones_like(batch['duration']) * 12.},
-            'do(edss=0)': {'edss': torch.ones_like(batch['edss']) + 1e-5},
-            'do(edss=6)': {'edss': torch.ones_like(batch['edss']) * 6.},
-            'do(brain_volume=8000, ventricle_volume=500)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 8000.,
-                                                            'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 500.},
-            'do(brain_volume=16000, ventricle_volume=1000)': {'brain_volume': torch.ones_like(batch['brain_volume']) * 16000.,
-                                                              'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 1000.}
+            'do(ventricle_volume=88ml)': {'ventricle_volume': torch.ones_like(batch['ventricle_volume']) * 88000.},
+            'do(lesion_volume=0ml)':    {'lesion_volume': torch.ones_like(batch['lesion_volume']) * 1e-5},
+            'do(lesion_volume=65ml)': {'lesion_volume': torch.ones_like(batch['lesion_volume']) * 65000.},
         }
         return counterfactuals
 
@@ -318,8 +303,8 @@ class BaseCovariateExperiment(pl.LightningModule):
 
         counterfactuals = self.get_counterfactual_conditions(batch)
 
-        for name, condition in counterfactuals.items():
-            samples[name] = self.pyro_model._gen_counterfactual(obs=batch, condition=condition)
+        for name, intervention in counterfactuals.items():
+            samples[name] = self.pyro_model._gen_counterfactual(obs=batch, condition=intervention)
 
         return samples
 
@@ -508,6 +493,7 @@ class BaseCovariateExperiment(pl.LightningModule):
         parser.add_argument('--train-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/train_png.csv", type=str, help="csv for training data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--valid-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/valid_png.csv", type=str, help="csv for validation data (default: %(default)s)")  # noqa: E501
         parser.add_argument('--test-csv', default="/iacl/pg20/jacobr/calabresi/png/csv/test_png.csv", type=str, help="csv for testing data (default: %(default)s)")  # noqa: E501
+        parser.add_argument('--test-dir', default="/iacl/pg20/jacobr/calabresi/run/out", type=str, help="output for test counterfactual volumes (default: %(default)s)")  # noqa: E501
         parser.add_argument('--crop-size', default=(224,224), type=int, nargs=2, help="size of patch to take from image (default: %(default)s)")
         parser.add_argument('--train-crop-type', default='random', choices=['random', 'center'], help="how to crop training images (default: %(default)s)")
         parser.add_argument('--sample-img-interval', default=5, type=int, help="interval in which to sample and log images (default: %(default)s)")
