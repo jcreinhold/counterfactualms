@@ -1,9 +1,11 @@
 import logging
 import os
 
+import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.metrics.classification import Accuracy
 import torch
+from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
@@ -20,11 +22,17 @@ class ClassifierExperiment(pl.LightningModule):
         self.hparams = hparams
         self.train_batch_size = hparams.train_batch_size
         self.test_batch_size = hparams.test_batch_size
+        self.input_size = ((3,) if hparams.pseudo3d else (1,)) + tuple(hparams.resize)
         self.classifier = Encoder(num_convolutions=hparams.num_convolutions,
                                   filters=hparams.filters,
+                                  input_size=self.input_size,
                                   latent_dim=1,
-                                  use_weight_norm=hparams.use_weight_norm)
-        self.accuracy = Accuracy()
+                                  use_weight_norm=hparams.use_weight_norm,
+                                  dropout_rate=hparams.dropout_rate)
+        self.classifier.fc = nn.Linear(np.prod(self.classifier.intermediate_shape), 1, bias=True)
+        self.train_acc = Accuracy()
+        self.val_acc = Accuracy()
+        self.test_acc = Accuracy()
 
         if hparams.validate:
             torch.backends.cudnn.deterministic = True
@@ -37,6 +45,10 @@ class ClassifierExperiment(pl.LightningModule):
         self.calabresi_train = CalabresiDataset(self.hparams.train_csv, crop_size=crop_size, crop_type=train_crop_type, resize=resize)  # noqa: E501
         self.calabresi_val = CalabresiDataset(self.hparams.valid_csv, crop_size=crop_size, crop_type='center', resize=resize)
         self.calabresi_test = CalabresiDataset(self.hparams.test_csv, crop_size=crop_size, crop_type='center', resize=resize)
+
+    @property
+    def required_data(self):
+        return {'x', 'type'}
 
     def configure_optimizers(self):
         optimizer = AdamW(self.classifier.parameters(), lr=self.hparams.lr,
@@ -63,11 +75,6 @@ class ClassifierExperiment(pl.LightningModule):
         """ add noise to discrete variables per Theis 2016 """
         if self.training:
             obs['x'] += (torch.rand_like(obs['x']) - 0.5)
-            obs['slice_number'] += (torch.rand_like(obs['slice_number']) - 0.5)
-            obs['duration'] += torch.rand_like(obs['duration'] - 0.5)
-            obs['duration'].clamp_(min=1e-4)
-            obs['edss'] += ((torch.rand_like(obs['edss']) / 2.) - 0.25)
-            obs['edss'].clamp_(min=1e-4)
         return obs
 
     def prep_batch(self, batch):
@@ -79,29 +86,30 @@ class ClassifierExperiment(pl.LightningModule):
         out = self._theis_noise(out)
         return out
 
-    def _step(self, batch):
+    def _step(self, batch, label=''):
         batch = self.prep_batch(batch)
-        type_hat = self.classifier(batch['x'])
-        loss = F.binary_cross_entropy_with_logits(type_hat, batch['type'])
-        return loss, type_hat
+        preds = self.classifier(batch['x'])
+        loss = F.binary_cross_entropy_with_logits(preds, batch['type'])
+        self.log(f'{label}_loss', loss)
+        acc = getattr(self, f'{label}_acc')
+        acc(preds.sigmoid(), batch['type'])
+        self.log(f'{label}_acc', acc, on_step=False, on_epoch=True)
+        return loss
 
     def forward(self, x):
         return self.classifier(x)
 
     def training_step(self, batch, batch_idx):
-        loss, _ = self._step(batch)
-        self.log('train_loss', loss)
+        loss = self._step(batch, 'train')
         return loss
 
-    def validation_step(self, batch, batch_idx, label='val'):
-        loss, type_hat = self._step(batch)
-        self.log(f'{label}_loss', loss)
-        accuracy = self.accuracy(torch.sigmoid_(type_hat), batch['type'])
-        self.log(f'{label}_accuracy', accuracy)
+    def validation_step(self, batch, batch_idx):
+        loss = self._step(batch, 'val')
         return loss
 
     def test_step(self, batch, batch_idx):
-        return self.validation_step(batch, batch_idx, 'test')
+        loss = self._step(batch, 'test')
+        return loss
 
     @classmethod
     def add_arguments(cls, parser):
@@ -115,8 +123,11 @@ class ClassifierExperiment(pl.LightningModule):
         parser.add_argument('--test-batch-size', default=256, type=int, help="test batch size (default: %(default)s)")
         parser.add_argument('--lr', default=1e-3, type=float, help="lr of deep part (default: %(default)s)")
         parser.add_argument('--weight-decay', default=0., type=float, help="weight decay for adam (default: %(default)s)")
+        parser.add_argument('--dropout-rate', default=0., type=float, help="dropout rate for classifier (default: %(default)s)")
         parser.add_argument('--betas', default=(0.9,0.999), type=float, nargs=2, help="betas for adam (default: %(default)s)")
         parser.add_argument('--filters', default=[8,16,32,64,128], nargs='+', type=int, help="number of filters in each layer of classifier (default: %(default)s)")
         parser.add_argument('--num-convolutions', default=3, type=int, help="number of convolutions in each layer (default: %(default)s)")
         parser.add_argument('--use-weight-norm', default=False, action='store_true', help="use weight norm in conv layers (default: %(default)s)")
+        parser.add_argument('--pseudo3d', default=False, action='store_true', help="use pseudo-3d images (3 channels) (default: %(default)s)")
+        parser.add_argument('--validate', default=False, action='store_true', help="more verbose validation (default: %(default)s)")
         return parser

@@ -8,6 +8,7 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
+from counterfactualms.experiments import classifier # noqa: F401
 from counterfactualms.experiments.classifier.classifier_experiment import ClassifierExperiment
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ def main():
         save_top_k=10,
         save_last=True,
         mode='min',
-        filename='{epoch}-{val_accuracy:.2f}-{val_loss:.2f}'
+        filename='{epoch}-{val_acc:.2f}-{val_loss:.2f}'
     )]
     trainer = Trainer.from_argparse_args(lightning_args, callbacks=callbacks)
 

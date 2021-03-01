@@ -8,7 +8,8 @@ from counterfactualms.arch.layers import Conv2d, ConvTranspose2d
 
 class Encoder(nn.Module):
     def __init__(self, num_convolutions=1, filters=(16,32,64,128,256), latent_dim:int=100,
-                 input_size=(1,128,128), use_weight_norm=False, use_spectral_norm=False):
+                 input_size=(1,128,128), use_weight_norm=False, use_spectral_norm=False,
+                 dropout_rate=0.):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -18,6 +19,7 @@ class Encoder(nn.Module):
             raise ValueError('Cannot use both weight norm and spectral norm.')
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
+        self.dropout_rate = dropout_rate
 
         layers = []
         cur_channels = input_size[0]
@@ -46,14 +48,20 @@ class Encoder(nn.Module):
         return partial(Conv2d, use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
 
     def _conv_layer(self, ci, co):
-        return [self._conv(ci, co, 3, 1, 1, bias=False),
-                nn.BatchNorm2d(co, momentum=0.05),
-                nn.LeakyReLU(.1, inplace=True)]
+        layer = [self._conv(ci, co, 3, 1, 1, bias=False),
+                 nn.BatchNorm2d(co, momentum=0.05),
+                 nn.LeakyReLU(.1, inplace=True)]
+        if self.dropout_rate > 0.:
+            layer.append(nn.Dropout2d(self.dropout_rate))
+        return layer
 
     def _down_conv_layer(self, ci, co):
-        return [self._conv(ci, co, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(co, momentum=0.05),
-                nn.LeakyReLU(.1, inplace=True)]
+        layer = [self._conv(ci, co, 4, 2, 1, bias=False),
+                 nn.BatchNorm2d(co, momentum=0.05),
+                 nn.LeakyReLU(.1, inplace=True)]
+        if self.dropout_rate > 0.:
+            layer.append(nn.Dropout2d(self.dropout_rate))
+        return layer
 
     def forward(self, x):
         x = self.cnn(x).view(-1, np.prod(self.intermediate_shape))
@@ -62,7 +70,8 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(self, num_convolutions=1, filters=(256,128,64,32,16), latent_dim=100,
-                 output_size=(1,128,128), upconv=False, use_weight_norm=False, use_spectral_norm=False):
+                 output_size=(1,128,128), upconv=False, use_weight_norm=False, use_spectral_norm=False,
+                 dropout_rate=0.):
         super().__init__()
 
         self.num_convolutions = num_convolutions
@@ -73,6 +82,7 @@ class Decoder(nn.Module):
             raise ValueError('Cannot use both weight norm and spectral norm.')
         self.use_weight_norm = use_weight_norm
         self.use_spectral_norm = use_spectral_norm
+        self.dropout_rate = dropout_rate
 
         self.intermediate_shape = np.array(output_size) // (2 ** (len(filters)))
         self.intermediate_shape[0] = filters[0]
@@ -108,9 +118,12 @@ class Decoder(nn.Module):
         return partial(ConvTranspose2d, use_weight_norm=self.use_weight_norm, use_spectral_norm=self.use_spectral_norm)
 
     def _conv_layer(self, c):
-        return [self._conv(c, c, 3, 1, 1, bias=False),
-                nn.BatchNorm2d(c, momentum=0.05),
-                nn.LeakyReLU(.1, inplace=True)]
+        layer = [self._conv(c, c, 3, 1, 1, bias=False),
+                 nn.BatchNorm2d(c, momentum=0.05),
+                 nn.LeakyReLU(.1, inplace=True)]
+        if self.dropout_rate > 0.:
+            layer.append(nn.Dropout2d(self.dropout_rate))
+        return layer
 
     def _upsample_layer(self, ci, co):
         if self.upconv:
@@ -120,6 +133,8 @@ class Decoder(nn.Module):
             layer = [self._conv_transpose(ci, co, kernel_size=4, stride=2, padding=1, bias=False)]
         layer += [nn.BatchNorm2d(co, momentum=0.05),
                   nn.LeakyReLU(.1, inplace=True)]
+        if self.dropout_rate > 0.:
+            layer.append(nn.Dropout2d(self.dropout_rate))
         return layer
 
     def forward(self, x):
