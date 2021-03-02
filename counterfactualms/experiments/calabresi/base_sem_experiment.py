@@ -703,8 +703,8 @@ class SVIExperiment(BaseCovariateExperiment):
     def test_step(self, batch, batch_idx):
         import nibabel as nib
         self._set_annealing_factor()
-        subject = batch['subject']
-        scan = batch['scan']
+        subject = int(batch['subject'][0])
+        scan = int(batch['scan'][0])
         batch = self.prep_batch(batch)
         loss = self.svi.evaluate_loss(batch)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
@@ -713,7 +713,7 @@ class SVIExperiment(BaseCovariateExperiment):
             self.log('test/' + k, v, on_step=False, on_epoch=True)
         samples = self.build_test_samples(batch)
         for intervention, data in samples.items():
-            cf = data.detach().cpu().numpy()
+            cf = data['x'].detach().cpu().numpy()
             if self.hparams.pseudo3d:
                 cf = cf[:,1,...]  # get the middle slices
             cf = cf.squeeze()
