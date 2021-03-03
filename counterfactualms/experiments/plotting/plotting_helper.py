@@ -7,6 +7,8 @@ import warnings
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import numpy as np
 from PIL import Image
 import pyro
@@ -34,6 +36,13 @@ models = {}
 loaded_models = {}
 device = None
 
+short_variables = (
+    'brain_volume',
+    'ventricle_volume',
+    'lesion_volume',
+    'duration',
+    'edss'
+)
 variables = (
     'sex',
     'age',
@@ -142,7 +151,10 @@ def fmt_intervention(intervention):
         var, value = intervention[3:-1].split('=')
         return f"$do({var_name[var]}={value_fmt[var](value)})$"
     else:
-        all_interventions = ',\n'.join([f'${var_name[k]}={value_fmt[k](v)}$' for k, v in intervention.items()])
+        if len(intervention.keys()) == 2:
+            all_interventions = ', '.join([f'${var_name[k]}={value_fmt[k](v)}$' for k, v in intervention.items()])
+        else:
+            all_interventions = ',\n'.join([f'${var_name[k]}={value_fmt[k](v)}$' for k, v in intervention.items()])
         return f"do({all_interventions})"
 
 
@@ -171,8 +183,14 @@ def prep_data(batch):
             'edss': edss, 'duration': duration, 'type': type, 'slice_number': slice_number}
 
 
-def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32, save=None):
-    fig, ax = plt.subplots(2, len(interventions)+1, figsize=(1.6 * len(interventions), 5*(2/3)), gridspec_kw=dict(wspace=0, hspace=0))
+def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=True, num_samples=32,
+                                width=None, height=None, fontsize=8, save=None):
+    if width is None:
+        width = 1.6 * len(interventions)
+    if height is None:
+        height = 5*(2/3)
+    fig, ax = plt.subplots(2, len(interventions)+1, figsize=(width, height),
+                           constrained_layout=True, gridspec_kw=dict(wspace=0, hspace=0))
     lim = 0
     orig_data = prep_data(calabresi_test[idx])
     ms_type = orig_data['type']
@@ -195,7 +213,7 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
     x_test = orig_data['x'].squeeze()
     orig = x_test[1] if x_test.ndim == 3 else x_test
     ax[0, 0].imshow(np.rot90(orig, n_rot90), img_cm, **imshow_kwargs)
-    ax[0, 0].set_title('Original')
+    ax[0, 0].set_title('Original',fontsize=fontsize)
     for i, intervention in enumerate(interventions):
         x = imgs[i].squeeze()
         diff = (x - x_test).squeeze()
@@ -207,23 +225,38 @@ def plot_gen_intervention_range(model_name, interventions, idx, normalise_all=Tr
                 diff = diff[1]
             else:
                 raise ValueError(f'Invalid channel size: {x.shape[0]}.')
-        ax[0, i+1].set_title(fmt_intervention(intervention))
+        ax[0, i+1].set_title(fmt_intervention(intervention),fontsize=fontsize)
         ax[0, i+1].imshow(np.rot90(x, n_rot90), img_cm, **imshow_kwargs)
-        ax[1, i+1].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
+        if i == 0:
+            im = ax[1, 1].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
+        else:
+            ax[1, i+1].imshow(np.rot90(diff, n_rot90), diff_cm, clim=[-lim, lim])
     for i in range(len(interventions) + 1):
         for axi in ax[:, i]:
             axi.axis('off')
             axi.xaxis.set_major_locator(plt.NullLocator())
             axi.yaxis.set_major_locator(plt.NullLocator())
 
+    cax = ax[1, 0].inset_axes([0.965, 0.1, 0.03, 0.80])
+    cb = plt.colorbar(im, cax=cax)
+    cb.outline.set_linewidth(0.25)
+    cax.tick_params(labelsize=fontsize/2, width=0.5, length=0.5,  direction='out', pad=0)
+    cax.yaxis.set_ticks_position('left')
+    cax.set_yticklabels([int(x) for x in cax.get_yticks()], rotation=45)
+
     orig_data['type'] = ms_type
-    suptitle = ('$s={sex}$; $a={age}$; $b={brain_volume}$; $v={ventricle_volume}$; $l={lesion_volume}$; $d={duration}$; $e={edss}$').format(
-        **{att: value_fmt[att](orig_data[att].item()) for att in variables}
+    att_str = ('$b={brain_volume}$\n$v={ventricle_volume}$\n$l={lesion_volume}$\n'
+               '$d={duration}$\n$e={edss}$').format(
+        **{att: value_fmt[att](orig_data[att].item()) for att in short_variables}
     )
-    fig.suptitle(suptitle, fontsize=13)
+
+    ax[1, 0].text(0.5, 0.5, att_str, horizontalalignment='center',
+                  verticalalignment='center', transform=ax[1,0].transAxes,
+                  fontsize=fontsize-1)
+
     fig.tight_layout()
     if save is not None:
-        plt.savefig(save)
+        plt.savefig(save, bbox_inches='tight')
     plt.show()
 
 

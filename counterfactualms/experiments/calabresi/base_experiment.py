@@ -236,18 +236,32 @@ class BaseCovariateExperiment(pl.LightningModule):
             self.sample_images()
 
     def test_epoch_end(self, outputs):
-        metrics = outputs['metrics']
-        samples = outputs['samples']
+        metrics = outputs[0]['metrics']
+        samples = outputs[0]['samples']
+        for i, item in enumerate(outputs[1:]):
+            m, s = item['metrics'], item['samples']
+            for k in metrics.keys():
+                if i == 0:
+                    metrics[k] = torch.stack((metrics[k], m[k]))
+                else:
+                    metrics[k] = torch.cat((metrics[k], m[k].unsqueeze(0)))
+            for k in samples.keys():
+                for j in samples[k].keys():
+                    if i == 0:
+                        samples[k][j] = torch.stack((samples[k][j], s[k][j]))
+                    else:
+                        samples[k][j] = torch.cat((samples[k][j], s[k][j].unsqueeze(0)))
         sample_trace = pyro.poutine.trace(self.pyro_model.sample).get_trace(self.hparams.test_batch_size)
-        samples['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data}
+        samples['unconditional_samples'] = {k: sample_trace.nodes[k]['value'].cpu() for k in self.required_data - {'x'}}
+        samples['unconditional_samples']['x'] = torch.mean(sample_trace.nodes['x']['fn'].sample((self.hparams.num_sample_particles,)), dim=0).cpu()
 
         logger.info(f'Got samples: {tuple(samples.keys())}')
         for k, v in samples.items():
-            p = os.path.join(self.trainer.logger.experiment.log_dir, f'{k}.pt')
+            p = os.path.join(self.hparams.test_dir, f'{k}.pt')
             logging.info(f'Saving samples for {k} to {p}')
             torch.save(v, p)
 
-        p = os.path.join(self.trainer.logger.experiment.log_dir, 'metrics.pt')
+        p = os.path.join(self.hparams.test_dir, 'metrics.pt')
         torch.save(metrics, p)
 
     def assemble_epoch_end_outputs(self, outputs):
