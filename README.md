@@ -1,13 +1,13 @@
 Counterfactual multiple sclerosis analysis
 ==========================================
 
-This repository hold code to support counterfactual analysis for MS subjects
+This repository hold code to support counterfactual analysis for people with (and without) MS.
 
-This work and code builds off of the work of Pawlowski et al. [1]. Their code is 
-[here](https://github.com/biomedia-mira/deepscm)
+This work builds on the work of Pawlowski et al. [1]. This is a fork of their 
+model which can be found [here](https://github.com/biomedia-mira/deepscm).
 
-This package was developed by [Jacob Reinhold](https://jcreinhold.github.io) and the other students and researchers 
-of the [Image Analysis and Communication Lab (IACL)](http://iacl.ece.jhu.edu/index.php/Main_Page).
+This package was developed by [Jacob Reinhold](https://jcreinhold.github.io)
+from the [Image Analysis and Communication Lab (IACL)](http://iacl.ece.jhu.edu/index.php/Main_Page).
 
 Installation
 ------------
@@ -20,13 +20,6 @@ or (if you'd like to make updates to the package)
 
     python setup.py develop
 
-Test Package
-------------
-
-Unit tests can be run from the main directory as follows:
-
-    nosetests -v tests
- 
 Structure
 ---------
 This repository contains code and assets structured as follows:
@@ -36,11 +29,6 @@ This repository contains code and assets structured as follows:
     - `datasets/`: script for dataset generation and data loading used in experiments
     - `distributions/`: implementations of useful distributions or transformations
     - `experiments/`: implementation of experiments
-    - `submodules/`: git submodules
-- `assets/`
-    - `data/`:
-        - `calabresi/`: subset of the calabresi dataset
-    - `models/`: checkpoints of the trained models
 
 References
 ----------
