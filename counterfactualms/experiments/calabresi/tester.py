@@ -20,6 +20,7 @@ def main():
     exp_parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     exp_parser.add_argument('--checkpoint-path', '-c', type=str, help='which checkpoint to load')
     exp_parser.add_argument('--batch-size', '-bs', type=int, help='batch size')
+    exp_parser.add_argument('--resize', '-rs', nargs=2, type=int, help='resize')
     exp_parser.add_argument('--out-dir', '-od', type=str, help='output directory for nifti counterfactuals')
     exp_parser.add_argument('--csv', '-csv', type=str, help='csv path')
     exp_parser.add_argument('-v', '--verbosity', action="count", default=0,
@@ -57,6 +58,7 @@ def main():
                                              or k in k in inspect.signature(model_class.__bases__[0].__init__).parameters
                                              or k in k in inspect.signature(model_class.__bases__[0].__bases__[0].__init__).parameters)
     }
+    model_params['img_shape'] = hparams['resize'] if 'resize' in hparams else exp_args.resize
     new_state_dict = OrderedDict()
     for key, value in ckpt['state_dict'].items():
         new_key = key.replace('pyro_model.', '')
@@ -80,6 +82,7 @@ def main():
     hparams = AttributeDict(hparams)
     hparams.test_dir = exp_args.out_dir
     hparams.test_csv = exp_args.csv
+    hparams.test_batch_size = exp_args.batch_size
     hparams.test_batch_size = exp_args.batch_size
     experiment = exp_class.load_from_checkpoint(checkpoint_path, hparams=hparams, pyro_model=loaded_model)
     logger.info(f'Loaded {experiment.__class__}:\n{experiment}')
