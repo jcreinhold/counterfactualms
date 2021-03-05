@@ -1,13 +1,15 @@
-Counterfactual multiple sclerosis analysis
-==========================================
+Structural causal model for MR images of multiple sclerosis 
+===========================================================
 
-This repository hold code to support counterfactual analysis for people with (and without) MS.
+This repository holds code to create counterfactual images for MR brain images people with (and without) MS.
 
-This work builds on the work of Pawlowski et al. [1]. This is a fork of their 
-model which can be found [here](https://github.com/biomedia-mira/deepscm).
+This code was used to implement the experiments in our paper ["A Structural Causal Model of MR Images of Multiple Sclerosis"](https://arxiv.org/abs/2103.03158).
+
+This work builds on the work of Pawlowski, Castro, and Glocker [1]. This is a fork of their 
+code which can be found [here](https://github.com/biomedia-mira/deepscm).
 
 This package was developed by [Jacob Reinhold](https://jcreinhold.github.io)
-from the [Image Analysis and Communication Lab (IACL)](http://iacl.ece.jhu.edu/index.php/Main_Page).
+of the [Image Analysis and Communication Lab (IACL)](http://iacl.ece.jhu.edu/index.php/Main_Page).
 
 Installation
 ------------
@@ -29,10 +31,10 @@ This repository contains code and assets structured as follows:
     - `datasets/`: script for dataset generation and data loading used in experiments
     - `distributions/`: implementations of useful distributions or transformations
     - `experiments/`: implementation of experiments
+- `assets/`: contains hyperparameters for the experiments listed in the paper
 
 References
 ----------
-  1. Pawlowski, Nick, Daniel C. Castro, and Ben Glocker. 
+  1. Pawlowski, Nick, Daniel Coelho de Castro, and Ben Glocker. 
      "Deep Structural Causal Models for Tractable Counterfactual Inference."
-     arXiv preprint arXiv:2006.06485 (2020).
-
+     Advances in Neural Information Processing Systems 33 (2020).
