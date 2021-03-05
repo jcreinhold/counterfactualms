@@ -6,7 +6,7 @@ using a *structural causal model* (SCM) [1] built in [Pyro](https://github.com/p
 
 This code was used to implement the experiments in our paper ["A Structural Causal Model of MR Images of Multiple Sclerosis"](https://arxiv.org/abs/2103.03158).
 
-Our work builds on the work of Pawlowski, Castro, and Glocker [3]. The code in
+Our work builds on the work of Pawlowski, Castro, and Glocker [2]. The code in
 this repository is a fork of their code which can be found [here](https://github.com/biomedia-mira/deepscm).
 
 This package was developed by [Jacob Reinhold](https://jcreinhold.github.io)
