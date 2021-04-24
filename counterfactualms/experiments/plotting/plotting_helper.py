@@ -7,6 +7,7 @@ import warnings
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from matplotlib.colors import LinearSegmentedColormap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import numpy as np
@@ -85,6 +86,9 @@ save_fmt = {
 imshow_kwargs = dict(vmin=0., vmax=255.)
 _buffers_to_load = ('norm', 'permutation', 'slice_number')
 
+_basic_cols = ['#57BFFF', '#000000', '#ff7986']
+dark_diverging_cmap = LinearSegmentedColormap.from_list('dark_diverging', _basic_cols)
+
 
 def get_best_model(model_paths):
     min_score = np.inf
@@ -107,8 +111,12 @@ def get_best_model(model_paths):
     return model_paths[idx]
 
 
-def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True, strict=True):
+def setup(model_path, csv_path, exp_crop_size=(224, 224), exp_resize=(128,128), use_gpu=True, strict=True, dark_mode=False):
     """ run this first with paths to models corresponding to experiments """
+    if dark_mode:
+        plt.style.use('dark_background')
+        global diff_cm
+        diff_cm = dark_diverging_cmap
     ckpt = torch.load(model_path, map_location=torch.device('cpu'))
     hparams = ckpt['hyper_parameters']
     exp = hparams['model']
