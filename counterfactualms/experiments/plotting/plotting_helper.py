@@ -86,7 +86,7 @@ save_fmt = {
 imshow_kwargs = dict(vmin=0., vmax=255.)
 _buffers_to_load = ('norm', 'permutation', 'slice_number')
 
-_basic_cols = ['#57BFFF', '#000000', '#ff7986']
+_basic_cols = ['#57BFFF', '#4eabe5', '#4598cc', '#000000', '#cc606b', '#e56c78', '#ff7986']
 dark_diverging_cmap = LinearSegmentedColormap.from_list('dark_diverging', _basic_cols)
 
 
